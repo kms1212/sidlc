@@ -49,6 +49,13 @@ target_include_directories(sidlc PRIVATE "${CMAKE_BINARY_DIR}")
 add_subdirectory(core)
 add_subdirectory(lang)
 
+# Install
+install(TARGETS sidlc RUNTIME DESTINATION bin)
+install(DIRECTORY interfaces/
+    DESTINATION share/sidl/interfaces
+    FILES_MATCHING PATTERN "*.sidl"
+)
+
 # Additional Targets
 if (BUILD_TESTING)
     add_subdirectory(tests)
