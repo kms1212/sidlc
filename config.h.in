@@ -1,0 +1,7 @@
+#ifndef __CONFIG_H__
+#define __CONFIG_H__
+
+#define SIDLC_VERSION  "@PROJECT_VERSION@"
+#define SIDLC_GIT_HASH "@PROJECT_GIT_HASH@"
+
+#endif  // __CONFIG_H__

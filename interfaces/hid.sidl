@@ -1,0 +1,7 @@
+@uuid("3E30B1DB-32E4-4CD5-999C-02ADFE52C417", "strata/interface/hid")
+@prefix("StIfHid_")
+interface Hid {
+    abirevision 0 {
+        // TBD
+    }
+}

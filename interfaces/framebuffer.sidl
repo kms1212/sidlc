@@ -1,0 +1,9 @@
+@uuid("3E30B1DB-32E4-4CD5-999C-02ADFE52C417", "strata/interface/framebuffer")
+@prefix("StIfFb_")
+interface Framebuffer {
+    abirevision 0 {
+        function GetBuffer(out ptr<opaque> buf, out u64 size);
+        function Invalidate(in u64 x, in u64 y, in u64 width, in u64 height);
+        function Flush();
+    }
+}
