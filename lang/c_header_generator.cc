@@ -68,12 +68,24 @@ void CHeaderGenerator::visit(InterfaceNode &node)
 
             std::span<const std::byte, 16> bytes = final_uuid.as_bytes();
 
-            buf_macros << "#define UUID_" << macro_interface_name << "_INTERFACE ((struct StUuid){ "
+            buf_macros << "#define UUID_" << macro_interface_name << "_INTERFACE_INIT UUID_INIT("
                        << std::hex;
             for (size_t i = 0; i < bytes.size(); i++) {
-                buf_macros << "0x" << static_cast<int>(bytes[i]) << ", ";
+                buf_macros << "0x" << static_cast<int>(bytes[i]);
+                if (i < bytes.size() - 1) {
+                    buf_macros << ", ";
+                }
             }
-            buf_macros << std::dec << "});\n";
+            buf_macros << std::dec << ")\n";
+
+            buf_macros << "#define UUID_" << macro_interface_name << "_INTERFACE UUID(" << std::hex;
+            for (size_t i = 0; i < bytes.size(); i++) {
+                buf_macros << "0x" << static_cast<int>(bytes[i]);
+                if (i < bytes.size() - 1) {
+                    buf_macros << ", ";
+                }
+            }
+            buf_macros << std::dec << ")\n";
         }
     }
 
@@ -92,6 +104,7 @@ void CHeaderGenerator::visit(InterfaceNode &node)
     out << "#include <stdint.h>\n\n";
     out << "#include <strata/status.h>\n";
     out << "#include <strata/macros.h>\n";
+    out << "#include <strata/handle.h>\n\n";
     out << "#include <strata/uuid.h>\n\n";
 
     if (buf_macros.tellp() > 0) {
@@ -186,7 +199,11 @@ void CHeaderGenerator::visit(BitfieldNode &node)
 
 void CHeaderGenerator::visit(FunctionNode &node)
 {
-    buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in, ";
+    if (node.parameters.empty()) {
+        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in";
+    } else {
+        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in, ";
+    }
 
     for (const auto &param : node.parameters) {
         bool add_pointer = param->direction != ParameterNode::Direction::IN;

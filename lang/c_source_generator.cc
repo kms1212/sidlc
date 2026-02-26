@@ -8,6 +8,14 @@
 
 void CSourceGenerator::visit(InterfaceNode &node)
 {
+    macro_interface_name = node.name;
+    std::transform(
+        macro_interface_name.begin(),
+        macro_interface_name.end(),
+        macro_interface_name.begin(),
+        ::toupper
+    );
+
     for (const auto &anno : node.annotations) {
         if (anno->name == "prefix") {
             if (anno->args.size() != 1) {
@@ -34,6 +42,7 @@ void CSourceGenerator::visit(InterfaceNode &node)
     out << " * ===================================================================== */\n\n";
 
     out << "#include \"" << header_name << "\"\n\n";
+    out << "#include <stdint.h>\n\n";
     out << "#include <strata/status.h>\n";
     out << "#include <strata/macros.h>\n";
     out << "#include <strata/uuid.h>\n";
@@ -44,9 +53,12 @@ void CSourceGenerator::visit(InterfaceNode &node)
         out << buf_macros.str() << "\n";
     }
 
-    out << "extern __get_func_id_base(StHandle handle __in, const struct StUuid *uuid __in, "
+    out << "extern StStatus __get_func_id_base(StHandle handle __in, const struct StUuid *uuid "
+           "__in, "
            "uint32_t request_groupid __in, uint32_t request_abiver __in, uint32_t *funcid_base "
            "__out, uint32_t *result_abiver __out);\n\n";
+    out << "static const struct StUuid interface_uuid = UUID_" << macro_interface_name
+        << "_INTERFACE_INIT;\n\n";
 
     if (buf_functions.tellp() > 0) {
         out << "/* Functions & Views */\n";
@@ -79,16 +91,20 @@ void CSourceGenerator::visit(FunctionNode &node)
 {
     buf_macros << "#define FUNCID_" << node.name << " " << current_funcid++ << "\n";
 
-    buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in, ";
+    if (node.parameters.empty()) {
+        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in";
+    } else {
+        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in, ";
+    }
 
     for (const auto &param : node.parameters) {
         bool add_pointer = param->direction != ParameterNode::Direction::IN;
 
         if (param->type->is_ptr) {
-            buf_functions << to_c_type(prefix, *param->type) << (add_pointer ? "*" : "")
+            buf_functions << to_c_type(prefix, *param->type) << (add_pointer ? "*_" : "_")
                           << param->name;
         } else {
-            buf_functions << to_c_type(prefix, *param->type) << (add_pointer ? " *" : " ")
+            buf_functions << to_c_type(prefix, *param->type) << (add_pointer ? " *_" : " _")
                           << param->name;
         }
 
@@ -127,7 +143,7 @@ void CSourceGenerator::visit(FunctionNode &node)
 
     buf_functions << "{\n";
     buf_functions << "    uint32_t funcid;\n";
-    buf_functions << "    StStatus _status;\n";
+    buf_functions << "    StStatus status;\n";
 
     if (has_nonout_params) {
         buf_functions << "    struct {\n";
@@ -143,7 +159,18 @@ void CSourceGenerator::visit(FunctionNode &node)
                               << ";\n";
             }
         }
-        buf_functions << "    } __packed in;\n";
+        buf_functions << "    } __packed in = {\n";
+        for (const auto &param : node.parameters) {
+            if (param->direction == ParameterNode::Direction::OUT) {
+                continue;
+            }
+            if (param->type->is_ptr) {
+                buf_functions << "        ." << param->name << " = _" << param->name << ",\n";
+            } else {
+                buf_functions << "        ." << param->name << " = _" << param->name << ",\n";
+            }
+        }
+        buf_functions << "    };\n";
     }
     if (has_out_params) {
         buf_functions << "    struct {\n";
@@ -161,10 +188,10 @@ void CSourceGenerator::visit(FunctionNode &node)
         }
         buf_functions << "    } __packed out;\n";
     }
-    buf_functions << "    _status = __get_func_id_base(handle, &UUID_BLOCK_INTERFACE, 0, 0, "
+    buf_functions << "    status = __get_func_id_base(handle, &interface_uuid, 0, 0, "
                      "&funcid, NULL);\n";
-    buf_functions << "    if (!CHECK_SUCCESS(_status)) { return _status; }\n";
-    buf_functions << "    _status = StKrt_Call(handle, FUNCID_" << node.name << ", ";
+    buf_functions << "    if (!CHECK_SUCCESS(status)) { return status; }\n";
+    buf_functions << "    status = StKrt_Call(handle, FUNCID_" << node.name << ", ";
     if (has_nonout_params) {
         buf_functions << "&in, sizeof(in), ";
     } else {
@@ -176,7 +203,18 @@ void CSourceGenerator::visit(FunctionNode &node)
         buf_functions << "NULL, 0";
     }
     buf_functions << ");\n";
-    buf_functions << "    if (!CHECK_SUCCESS(_status)) { return _status; }\n";
+    buf_functions << "    if (!CHECK_SUCCESS(status)) { return status; }\n";
+
+    if (has_out_params) {
+        for (const auto &param : node.parameters) {
+            if (param->direction != ParameterNode::Direction::OUT) {
+                continue;
+            }
+            buf_functions << "    if (_" << param->name << " != NULL) { *_" << param->name
+                          << " = out." << param->name << "; }\n";
+        }
+    }
+
     buf_functions << "    return STATUS_SUCCESS;\n";
     buf_functions << "}\n\n";
 }

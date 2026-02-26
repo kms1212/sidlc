@@ -7,7 +7,7 @@ interface ByteStream {
             PEEK : 1;
         };
 
-        function Seek(in s64 offset, in u32 whence, out s64 offset);
+        function Seek(in s64 offset, in u32 whence, out s64 result);
         function Tell(out s64 offset);
         function Read(in ptr<u8> buf, in u64 size, in IoFlags flags, out u64 result);
         function Write(in const ptr<u8> buf, in u64 size, in IoFlags flags, out u64 result);

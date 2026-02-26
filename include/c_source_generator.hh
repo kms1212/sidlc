@@ -10,6 +10,7 @@
 class CSourceGenerator : public AstVisitor {
     std::ostream &out;
     std::string prefix;
+    std::string macro_interface_name;
     std::string header_name;
     std::stringstream buf_macros;
     std::stringstream buf_functions;
