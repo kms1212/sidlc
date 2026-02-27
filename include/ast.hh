@@ -1,6 +1,7 @@
 #ifndef __AST_HH__
 #define __AST_HH__
 
+#include <memory>
 #include <vector>
 
 struct InterfaceNode;
