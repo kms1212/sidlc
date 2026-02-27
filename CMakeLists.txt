@@ -55,6 +55,9 @@ install(DIRECTORY interfaces/
     DESTINATION share/sidl/interfaces
     FILES_MATCHING PATTERN "*.sidl"
 )
+install(FILES cmake/UseSIDLC.cmake
+    DESTINATION share/cmake-${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}/Modules
+)
 
 # Additional Targets
 if (BUILD_TESTING)
