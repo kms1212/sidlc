@@ -10,16 +10,13 @@ struct GroupNode;
 struct AbiversionNode;
 struct StructNode;
 struct BitfieldNode;
+struct EnumNode;
 struct FunctionNode;
 struct ParameterNode;
 struct TypeNode;
 struct StructFieldNode;
+struct EnumMemberNode;
 struct BitfieldFieldNode;
-struct DeclarationNode;
-struct StatementNode;
-struct AssignmentStatementNode;
-struct ExpressionStatementNode;
-struct VariableDeclarationNode;
 struct ExpressionNode;
 struct LiteralExpressionNode;
 struct StringLiteralExpressionNode;
@@ -27,10 +24,10 @@ struct NumberLiteralExpressionNode;
 struct IdentifierExpressionNode;
 
 class AstVisitor {
-  protected:
+protected:
     std::string to_c_type(std::string &prefix, TypeNode &node);
 
-  public:
+public:
     virtual ~AstVisitor() = default;
 
     virtual void visit(InterfaceNode &node) {};
@@ -39,13 +36,13 @@ class AstVisitor {
     virtual void visit(AbiversionNode &node) {};
     virtual void visit(StructNode &node) {};
     virtual void visit(BitfieldNode &node) {};
+    virtual void visit(EnumNode &node) {};
     virtual void visit(FunctionNode &node) {};
     virtual void visit(ParameterNode &node) {};
     virtual void visit(TypeNode &node) {};
     virtual void visit(StructFieldNode &node) {};
+    virtual void visit(EnumMemberNode &node) {};
     virtual void visit(BitfieldFieldNode &node) {};
-    virtual void visit(DeclarationNode &node) {};
-    virtual void visit(VariableDeclarationNode &node) {};
     virtual void visit(ExpressionNode &node) {};
     virtual void visit(LiteralExpressionNode &node) {};
     virtual void visit(StringLiteralExpressionNode &node) {};
@@ -93,66 +90,6 @@ struct IdentifierExpressionNode : public ExpressionNode {
     }
 };
 
-struct UnaryExpressionNode : public ExpressionNode {
-    enum class Operator {
-        NOT,
-        NEG,
-        REF,
-        DEREF,
-        SIZEOF,
-    };
-
-    Operator op;
-    std::unique_ptr<ExpressionNode> expr;
-
-    void accept(AstVisitor &visitor) override
-    {
-        visitor.visit(*this);
-    }
-};
-
-struct BinaryExpressionNode : public ExpressionNode {
-    enum class Operator {
-        ADD,
-        SUB,
-        MUL,
-        DIV,
-        MOD,
-        AND,
-        OR,
-        XOR,
-        SHL,
-        SHR,
-        EQ,
-        NE,
-        LT,
-        LE,
-        GT,
-        GE,
-        LOGIC_AND,
-        LOGIC_OR,
-    };
-
-    Operator op;
-    std::unique_ptr<ExpressionNode> left;
-    std::unique_ptr<ExpressionNode> right;
-
-    void accept(AstVisitor &visitor) override
-    {
-        visitor.visit(*this);
-    }
-};
-
-struct FunctionCallExpressionNode : public ExpressionNode {
-    std::unique_ptr<IdentifierExpressionNode> func;
-    std::vector<std::unique_ptr<ExpressionNode>> args;
-
-    void accept(AstVisitor &visitor) override
-    {
-        visitor.visit(*this);
-    }
-};
-
 struct AnnotationNode : public AstNode {
     std::string_view name;
     std::vector<std::unique_ptr<ExpressionNode>> args;
@@ -165,9 +102,11 @@ struct AnnotationNode : public AstNode {
 
 struct TypeNode : public AstNode {
     std::string_view name;
-    std::unique_ptr<TypeNode> ptr_type;
+    std::unique_ptr<TypeNode> inner_type;
     bool is_ptr;
+    bool is_array;
     bool is_const;
+    size_t type_size;
 
     void accept(AstVisitor &visitor) override
     {
@@ -193,35 +132,40 @@ struct ParameterNode : public AstNode {
     }
 };
 
-struct DeclarationNode : public AstNode {
-    std::unique_ptr<TypeNode> type;
-    std::string_view name;
-
-    void accept(AstVisitor &visitor) override
-    {
-        visitor.visit(*this);
-    }
-};
-
-struct StatementNode : public AstNode {
-    virtual ~StatementNode() = default;
-};
-
-struct VariableDeclarationNode : public StatementNode {
-    std::unique_ptr<TypeNode> type;
-    std::string_view name;
-    std::unique_ptr<ExpressionNode> init;
-
-    void accept(AstVisitor &visitor) override
-    {
-        visitor.visit(*this);
-    }
-};
-
 struct FunctionNode : public AstNode {
     std::string_view name;
     std::vector<std::unique_ptr<AnnotationNode>> annotations;
     std::vector<std::unique_ptr<ParameterNode>> parameters;
+    AbiversionNode &abiversion;
+    uint32_t id;
+
+    FunctionNode(AbiversionNode &abiversion) : abiversion(abiversion) {}
+
+    void accept(AstVisitor &visitor) override
+    {
+        visitor.visit(*this);
+    }
+};
+
+struct EnumMemberNode : public AstNode {
+    std::string_view name;
+    uint64_t value;
+    std::vector<std::unique_ptr<AnnotationNode>> annotations;
+
+    void accept(AstVisitor &visitor) override
+    {
+        visitor.visit(*this);
+    }
+};
+
+struct EnumNode : public AstNode {
+    std::string_view name;
+    std::unique_ptr<TypeNode> base_type;
+    std::vector<std::unique_ptr<AnnotationNode>> annotations;
+    std::vector<std::unique_ptr<EnumMemberNode>> members;
+    AbiversionNode &abiversion;
+
+    EnumNode(AbiversionNode &abiversion) : abiversion(abiversion) {}
 
     void accept(AstVisitor &visitor) override
     {
@@ -243,6 +187,9 @@ struct StructNode : public AstNode {
     std::string_view name;
     std::vector<std::unique_ptr<AnnotationNode>> annotations;
     std::vector<std::unique_ptr<StructFieldNode>> fields;
+    AbiversionNode &abiversion;
+
+    StructNode(AbiversionNode &abiversion) : abiversion(abiversion) {}
 
     void accept(AstVisitor &visitor) override
     {
@@ -265,6 +212,9 @@ struct BitfieldNode : public AstNode {
     std::unique_ptr<TypeNode> base_type;
     std::vector<std::unique_ptr<AnnotationNode>> annotations;
     std::vector<std::unique_ptr<BitfieldFieldNode>> fields;
+    AbiversionNode &abiversion;
+
+    BitfieldNode(AbiversionNode &abiversion) : abiversion(abiversion) {}
 
     void accept(AstVisitor &visitor) override
     {
@@ -278,6 +228,10 @@ struct AbiversionNode : public AstNode {
     std::vector<std::unique_ptr<FunctionNode>> functions;
     std::vector<std::unique_ptr<StructNode>> structs;
     std::vector<std::unique_ptr<BitfieldNode>> bitfields;
+    std::vector<std::unique_ptr<EnumNode>> enums;
+    GroupNode &group;
+
+    AbiversionNode(GroupNode &group) : group(group) {}
 
     void accept(AstVisitor &visitor) override
     {
@@ -289,6 +243,11 @@ struct GroupNode : public AstNode {
     std::string_view name;
     std::vector<std::unique_ptr<AnnotationNode>> annotations;
     std::vector<std::unique_ptr<AbiversionNode>> abiversions;
+    InterfaceNode &interface;
+    uint32_t id;
+    uint32_t current_funcid;
+
+    GroupNode(InterfaceNode &interface) : interface(interface), current_funcid(0) {}
 
     void accept(AstVisitor &visitor) override
     {
@@ -300,6 +259,9 @@ struct InterfaceNode : public AstNode {
     std::string_view name;
     std::vector<std::unique_ptr<AnnotationNode>> annotations;
     std::vector<std::unique_ptr<GroupNode>> groups;
+    uint32_t current_groupid;
+
+    InterfaceNode() : current_groupid(0) {}
 
     void accept(AstVisitor &visitor) override
     {

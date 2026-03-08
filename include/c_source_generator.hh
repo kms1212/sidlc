@@ -14,11 +14,11 @@ class CSourceGenerator : public AstVisitor {
     std::string header_name;
     std::stringstream buf_macros;
     std::stringstream buf_functions;
-    size_t current_funcid;
+    bool make_weak_symbols;
 
   public:
-    CSourceGenerator(std::ostream &out, const std::string &header_name)
-        : out(out), header_name(header_name), current_funcid(0)
+    CSourceGenerator(std::ostream &out, const std::string &header_name, bool make_weak_symbols)
+        : out(out), header_name(header_name), make_weak_symbols(make_weak_symbols)
     {
     }
 

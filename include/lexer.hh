@@ -16,12 +16,14 @@ struct Token {
         TYPE_KWD_GROUP,
         TYPE_KWD_ABIREVISION,
         TYPE_KWD_STRUCT,
+        TYPE_KWD_BITFIELD,
+        TYPE_KWD_ENUM,
         TYPE_KWD_FUNCTION,
         TYPE_KWD_INOUT,
         TYPE_KWD_IN,
         TYPE_KWD_OUT,
-        TYPE_KWD_BITFIELD,
         TYPE_KWD_PTR,
+        TYPE_KWD_ARRAY,
         TYPE_KWD_CONST,
     };
 

@@ -77,6 +77,8 @@ Token Lexer::next_token()
             type = Token::TYPE_KWD_STRUCT;
         } else if (text == "function") {
             type = Token::TYPE_KWD_FUNCTION;
+        } else if (text == "enum") {
+            type = Token::TYPE_KWD_ENUM;
         } else if (text == "inout") {
             type = Token::TYPE_KWD_INOUT;
         } else if (text == "in") {
@@ -87,6 +89,8 @@ Token Lexer::next_token()
             type = Token::TYPE_KWD_BITFIELD;
         } else if (text == "ptr") {
             type = Token::TYPE_KWD_PTR;
+        } else if (text == "array") {
+            type = Token::TYPE_KWD_ARRAY;
         } else if (text == "const") {
             type = Token::TYPE_KWD_CONST;
         }
@@ -166,6 +170,7 @@ Token Lexer::next_token()
     case ';':
     case ',':
     case '.':
+    case '=':
         advance();
         break;
     default:

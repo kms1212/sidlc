@@ -2,6 +2,7 @@
 
 #include <uuid.h>
 
+#include <arch_abi.hh>
 #include <ast.hh>
 
 #include "config.h"
@@ -53,12 +54,8 @@ void CSourceGenerator::visit(InterfaceNode &node)
         out << buf_macros.str() << "\n";
     }
 
-    out << "extern StStatus __get_func_id_base(StHandle handle __in, const struct StUuid *uuid "
-           "__in, "
-           "uint32_t request_groupid __in, uint32_t request_abiver __in, uint32_t *funcid_base "
-           "__out, uint32_t *result_abiver __out);\n\n";
-    out << "static const struct StUuid interface_uuid = UUID_" << macro_interface_name
-        << "_INTERFACE_INIT;\n\n";
+    out << "static const struct StUuid interface_uuid = "
+        << "UUID_" << macro_interface_name << "_INTERFACE_INIT;\n\n";
 
     if (buf_functions.tellp() > 0) {
         out << "/* Functions & Views */\n";
@@ -89,8 +86,11 @@ void CSourceGenerator::visit(AbiversionNode &node)
 
 void CSourceGenerator::visit(FunctionNode &node)
 {
-    buf_macros << "#define FUNCID_" << node.name << " " << current_funcid++ << "\n";
+    buf_macros << "#define FUNCID_" << node.name << " " << node.id << "\n";
 
+    if (make_weak_symbols) {
+        buf_functions << "__attribute__((weak))\n";
+    }
     if (node.parameters.empty()) {
         buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in";
     } else {
@@ -127,91 +127,166 @@ void CSourceGenerator::visit(FunctionNode &node)
 
     buf_functions << ")\n";
 
-    bool has_out_params = false;
-    bool has_nonout_params = false;
+    bool can_use_call_reg = true;
+    size_t k_base = 2;
+    size_t n_avail = g_current_arch_abi->max_reg_args - k_base;
+    size_t k_peel = n_avail > 2 ? n_avail - 2 : 0;
+
+    if (node.parameters.size() > n_avail) {
+        can_use_call_reg = false;
+    }
+
+    std::vector<ParameterNode *> peeled_params;
+    std::vector<ParameterNode *> packed_in_params;
+    std::vector<ParameterNode *> packed_out_params;
+
     for (const auto &param : node.parameters) {
-        if (param->direction == ParameterNode::Direction::OUT) {
-            has_out_params = true;
-        } else {
-            has_nonout_params = true;
+        bool is_scalar = param->direction == ParameterNode::Direction::IN && !param->type->is_ptr &&
+            !param->type->is_array && param->type->type_size <= g_current_arch_abi->pointer_size;
+
+        if (!is_scalar) {
+            can_use_call_reg = false;
         }
 
-        if (has_out_params && has_nonout_params) {
-            break;
+        if (param->direction == ParameterNode::Direction::OUT) {
+            packed_out_params.push_back(param.get());
+        } else {
+            if (is_scalar && peeled_params.size() < k_peel) {
+                peeled_params.push_back(param.get());
+            } else {
+                packed_in_params.push_back(param.get());
+            }
         }
     }
 
     buf_functions << "{\n";
-    buf_functions << "    uint32_t funcid;\n";
     buf_functions << "    StStatus status;\n";
+    buf_functions << "    uint32_t funcid_base;\n";
 
-    if (has_nonout_params) {
-        buf_functions << "    struct {\n";
-        for (const auto &param : node.parameters) {
-            if (param->direction == ParameterNode::Direction::OUT) {
-                continue;
+    if (!can_use_call_reg && !packed_in_params.empty()) {
+        if (packed_in_params.size() > 1) {
+            buf_functions << "    struct {\n";
+            for (const auto &param : packed_in_params) {
+                switch (param->direction) {
+                case ParameterNode::Direction::IN:
+                    if (param->type->is_ptr) {
+                        buf_functions << "        " << to_c_type(prefix, *param->type)
+                                      << param->name << ";\n";
+                    } else {
+                        buf_functions << "        " << to_c_type(prefix, *param->type) << " "
+                                      << param->name << ";\n";
+                    }
+                    break;
+                case ParameterNode::Direction::INOUT:
+                    if (param->type->is_ptr) {
+                        buf_functions << "        " << to_c_type(prefix, *param->type) << "*"
+                                      << param->name << ";\n";
+                    } else {
+                        buf_functions << "        " << to_c_type(prefix, *param->type) << " *"
+                                      << param->name << ";\n";
+                    }
+                    break;
+                case ParameterNode::Direction::OUT:
+                    break;
+                }
             }
-            if (param->type->is_ptr) {
-                buf_functions << "        " << to_c_type(prefix, *param->type) << param->name
-                              << ";\n";
-            } else {
-                buf_functions << "        " << to_c_type(prefix, *param->type) << " " << param->name
-                              << ";\n";
+            buf_functions << "    } __packed in = {\n";
+            for (const auto &param : packed_in_params) {
+                if (param->type->is_ptr) {
+                    buf_functions << "        ." << param->name << " = _" << param->name << ",\n";
+                } else {
+                    buf_functions << "        ." << param->name << " = _" << param->name << ",\n";
+                }
             }
+            buf_functions << "    };\n";
         }
-        buf_functions << "    } __packed in = {\n";
-        for (const auto &param : node.parameters) {
-            if (param->direction == ParameterNode::Direction::OUT) {
-                continue;
+    }
+    if (!can_use_call_reg && !packed_out_params.empty()) {
+        if (packed_out_params.size() > 1) {
+            buf_functions << "    struct {\n";
+            for (const auto &param : packed_out_params) {
+                if (param->type->is_ptr) {
+                    buf_functions << "        " << to_c_type(prefix, *param->type) << param->name
+                                  << ";\n";
+                } else {
+                    buf_functions << "        " << to_c_type(prefix, *param->type) << " "
+                                  << param->name << ";\n";
+                }
             }
-            if (param->type->is_ptr) {
-                buf_functions << "        ." << param->name << " = _" << param->name << ",\n";
-            } else {
-                buf_functions << "        ." << param->name << " = _" << param->name << ",\n";
-            }
+            buf_functions << "    } __packed out;\n";
+        } else if (!packed_out_params.front()->type->is_ptr) {
+            buf_functions << "    " << to_c_type(prefix, *packed_out_params.front()->type)
+                          << " out;\n";
         }
-        buf_functions << "    };\n";
     }
-    if (has_out_params) {
-        buf_functions << "    struct {\n";
-        for (const auto &param : node.parameters) {
-            if (param->direction != ParameterNode::Direction::OUT) {
-                continue;
-            }
-            if (param->type->is_ptr) {
-                buf_functions << "        " << to_c_type(prefix, *param->type) << param->name
-                              << ";\n";
-            } else {
-                buf_functions << "        " << to_c_type(prefix, *param->type) << " " << param->name
-                              << ";\n";
-            }
-        }
-        buf_functions << "    } __packed out;\n";
-    }
-    buf_functions << "    status = __get_func_id_base(handle, &interface_uuid, 0, 0, "
-                     "&funcid, NULL);\n";
-    buf_functions << "    if (!CHECK_SUCCESS(status)) { return status; }\n";
-    buf_functions << "    status = StKrt_Call(handle, FUNCID_" << node.name << ", ";
-    if (has_nonout_params) {
-        buf_functions << "&in, sizeof(in), ";
-    } else {
-        buf_functions << "NULL, 0, ";
-    }
-    if (has_out_params) {
-        buf_functions << "&out, sizeof(out)";
-    } else {
-        buf_functions << "NULL, 0";
-    }
-    buf_functions << ");\n";
+    buf_functions << "    status = StHandle_Query("
+                     "handle, &interface_uuid, "
+                  << node.abiversion.group.id << ", " << node.abiversion.version
+                  << ", &funcid_base, NULL);\n";
     buf_functions << "    if (!CHECK_SUCCESS(status)) { return status; }\n";
 
-    if (has_out_params) {
-        for (const auto &param : node.parameters) {
-            if (param->direction != ParameterNode::Direction::OUT) {
-                continue;
+    if (can_use_call_reg) {
+        buf_functions << "    status = StHandle_Call" << node.parameters.size()
+                      << "(handle, funcid_base + FUNCID_" << node.name;
+        for (size_t i = 0; i < node.parameters.size(); ++i) {
+            buf_functions << ", (unsigned long)_" << node.parameters[i]->name;
+        }
+        buf_functions << ");\n";
+    } else {
+        buf_functions << "    status = StHandle_CallN(handle, funcid_base + FUNCID_" << node.name
+                      << ", ";
+        if (!packed_in_params.empty()) {
+            if (packed_in_params.size() == 1) {
+                if (packed_in_params.front()->type->is_ptr) {
+                    buf_functions << "(const void *)_" << packed_in_params.front()->name << ", ";
+                } else {
+                    buf_functions << "(const void *)&_" << packed_in_params.front()->name << ", ";
+                }
+            } else {
+                buf_functions << "(const void *)&in, ";
             }
-            buf_functions << "    if (_" << param->name << " != NULL) { *_" << param->name
-                          << " = out." << param->name << "; }\n";
+        } else {
+            buf_functions << "NULL, ";
+        }
+        if (!packed_out_params.empty()) {
+            if (packed_out_params.size() == 1) {
+                if (packed_out_params.front()->type->is_ptr) {
+                    buf_functions << "(void *)_" << packed_out_params.front()->name << ", ";
+                } else {
+                    buf_functions << "(void *)&out, ";
+                }
+            } else {
+                buf_functions << "(void *)&out, ";
+            }
+        } else {
+            buf_functions << "NULL, ";
+        }
+        for (size_t i = 0; i < k_peel; ++i) {
+            if (i < peeled_params.size()) {
+                buf_functions << "(unsigned long)_" << peeled_params[i]->name;
+            } else {
+                buf_functions << "0";
+            }
+            if (i < k_peel - 1) {
+                buf_functions << ", ";
+            }
+        }
+        buf_functions << ");\n";
+    }
+    buf_functions << "    if (!CHECK_SUCCESS(status)) { return status; }\n";
+
+    if (!can_use_call_reg && !packed_out_params.empty()) {
+        if (packed_out_params.size() == 1) {
+            auto param = packed_out_params.front();
+            if (!param->type->is_ptr) {
+                buf_functions << "    if (_" << param->name << " != NULL) "
+                              << "{ *_" << param->name << " = out; }\n";
+            }
+        } else {
+            for (const auto &param : packed_out_params) {
+                buf_functions << "    if (_" << param->name << " != NULL) "
+                              << "{ *_" << param->name << " = out." << param->name << "; }\n";
+            }
         }
     }
 

@@ -24,6 +24,7 @@ class CHeaderGenerator : public AstVisitor {
     void visit(AbiversionNode &node) override;
     void visit(StructNode &node) override;
     void visit(BitfieldNode &node) override;
+    void visit(EnumNode &node) override;
     void visit(FunctionNode &node) override;
 };
 

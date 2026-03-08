@@ -1,26 +1,63 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <string>
 
-#include <c_header_generator.hh>
-#include <c_source_generator.hh>
+#include <arch_abi.hh>
+#include <c_handler.hh>
+#include <lang_info.hh>
 #include <lexer.hh>
 #include <parser.hh>
 
 #include "config.h"
 
+static const std::map<std::string, LangInfo> lang_infos = {
+    {
+        "c",
+        {
+            "c",
+            {
+                { "opaque", { "void", 0, 0 } },
+                { "u8", { "uint8_t", 1, 1 } },
+                { "u16", { "uint16_t", 2, 2 } },
+                { "u32", { "uint32_t", 4, 4 } },
+                { "u64", { "uint64_t", 8, 8 } },
+                { "s8", { "int8_t", 1, 1 } },
+                { "s16", { "int16_t", 2, 2 } },
+                { "s32", { "int32_t", 4, 4 } },
+                { "s64", { "int64_t", 8, 8 } },
+                { "handle", { "StHandle", 4, 4 } },
+                { "status", { "StStatus", 4, 4 } },
+            },
+            c_handle_option,
+            c_generate,
+        },
+    },
+};
+
+static const std::map<std::string, ArchAbi> arch_abis = {
+    { "x86_64", { "x86_64", 8, 6 } },
+};
+
+const ArchAbi *g_current_arch_abi = nullptr;
+const LangInfo *g_current_lang_info = nullptr;
+
 void print_usage(const char *argv0)
 {
-    std::cerr << "Usage: " << argv0 << " [options] <file>" << std::endl;
-    std::cerr << "Options:" << std::endl;
-    std::cerr << "  -h, --help  Print this help message" << std::endl;
-    std::cerr << "  -v, --version  Print the version number" << std::endl;
-    std::cerr << "  --header=<path>                 Output C header file path (.h)" << std::endl;
-    std::cerr << "  --user-src=<path>               Output C source file path (.c)" << std::endl;
     std::cerr
-        << "  --user-src-header-path=<path>   Include path to be written in the generated C source"
-        << std::endl;
+        << "Usage: " << argv0 << " [options] <file>\n"
+        << "Options:\n"
+           "  -h, --help    Print this help message\n"
+           "  -v, --version Print the version number\n"
+           "  --arch=<arch> Set output architecture\n"
+           "  --lang=<lang> Set output language\n\n"
+           "Per-language options:\n"
+           "  C: (--lang=c)\n"
+           "    --weak                        Make weak symbols\n"
+           "    --header=<path>               Output header file path (.h)\n"
+           "    --user-src=<path>             Output source file path (.c)\n"
+           "    --user-src-header-path=<path> Include path to be written in the generated source\n";
 }
 
 int main(int argc, char **argv)
@@ -31,45 +68,67 @@ int main(int argc, char **argv)
     }
 
     std::string input_file_path;
-    std::string header_path;
-    std::string user_src_path;
-    std::string user_src_header_path;
+    std::string arch;
+    std::string lang;
+
+    // First pass to find the language handler and handle immediate exit flags
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "-h" || arg == "--help") {
+            print_usage(argv[0]);
+            return 0;
+        } else if (arg == "-v" || arg == "--version") {
+            std::cout << "sidlc version " << SIDLC_VERSION << " (" << SIDLC_GIT_HASH << ")"
+                      << std::endl;
+            return 0;
+        } else if (arg.rfind("--lang=", 0) == 0) {
+            lang = arg.substr(7);
+        }
+    }
+
+    if (lang.empty()) {
+        std::cerr << "Error: Language not specified" << '\n';
+        return 1;
+    }
+
+    auto it_lang = lang_infos.find(lang);
+    if (it_lang == lang_infos.end()) {
+        std::cerr << "Error: Unknown language " << lang << '\n';
+        return 1;
+    }
+    g_current_lang_info = &it_lang->second;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
 
-        if (arg == "-h" || arg == "--help") {
-            print_usage(argv[0]);
-            return 0;
-        }
-        if (arg == "-v" || arg == "--version") {
-            std::cout << "sidlc version " << SIDLC_VERSION << " (" << SIDLC_GIT_HASH << ")"
-                      << std::endl;
-            return 0;
-        }
-        if (arg.rfind("--header=", 0) == 0) {
-            header_path = arg.substr(9);
-            continue;
-        }
-        if (arg.rfind("--user-src=", 0) == 0) {
-            user_src_path = arg.substr(11);
-            continue;
-        }
-        if (arg.rfind("--user-src-header-path=", 0) == 0) {
-            user_src_header_path = arg.substr(23);
-            continue;
-        }
-        if (arg.rfind("--") == 0) {
-            std::cerr << "Error: Unknown option " << arg << std::endl;
+        if (arg.rfind("--arch=", 0) == 0) {
+            arch = arg.substr(7);
+        } else if (arg.rfind("--lang=", 0) == 0) {
+            // Handled in first pass
+        } else if (arg.rfind("--") == 0) {
+            if (!g_current_lang_info->handle_option(arg)) {
+                std::cerr << "Error: Unknown option " << arg << '\n';
+                return 1;
+            }
+        } else if (input_file_path.empty()) {
+            input_file_path = arg;
+        } else {
+            std::cerr << "Error: Too many input files" << '\n';
             return 1;
         }
-        if (input_file_path.empty()) {
-            input_file_path = arg;
-            continue;
-        }
-        std::cerr << "Error: Too many input files" << std::endl;
+    }
+
+    if (arch.empty()) {
+        std::cerr << "Error: Architecture not specified" << '\n';
         return 1;
     }
+
+    auto it = arch_abis.find(arch);
+    if (it == arch_abis.end()) {
+        std::cerr << "Error: Unknown architecture " << arch << '\n';
+        return 1;
+    }
+    g_current_arch_abi = &it->second;
 
     std::ifstream file(input_file_path);
     if (!file.is_open()) {
@@ -82,28 +141,8 @@ int main(int argc, char **argv)
 
     auto interface = parser.parse();
 
-    if (!header_path.empty()) {
-        std::ofstream header_file(header_path);
-        if (!header_file.is_open()) {
-            std::cerr << "Error: Could not open file " << header_path << std::endl;
-            return 1;
-        }
-        CHeaderGenerator header_gen(header_file);
-        interface->accept(header_gen);
-    }
-
-    if (user_src_header_path.empty()) {
-        user_src_header_path = header_path.substr(header_path.rfind("/") + 1);
-    }
-
-    if (!user_src_path.empty()) {
-        std::ofstream user_src_file(user_src_path);
-        if (!user_src_file.is_open()) {
-            std::cerr << "Error: Could not open file " << user_src_path << std::endl;
-            return 1;
-        }
-        CSourceGenerator source_gen(user_src_file, user_src_header_path);
-        interface->accept(source_gen);
+    if (!g_current_lang_info->generate(interface.get())) {
+        return 1;
     }
 
     return 0;

@@ -1,7 +1,7 @@
 find_program(SIDLC_EXECUTABLE sidlc REQUIRED)
 
 get_filename_component(SIDLC_INTERFACE_DIRECTORY ${SIDLC_EXECUTABLE} DIRECTORY)
-get_filename_component(SIDLC_INTERFACE_DIRECTORY ${SIDLC_INTERFACE_DIRECTORY}/../share/sidl/interfaces/ ABSOLUTE)
+get_filename_component(SIDLC_INTERFACE_DIRECTORY ${SIDLC_INTERFACE_DIRECTORY}/../lib/sidl/interfaces/ ABSOLUTE)
 
 # =========================================================================
 # sidl_generate_c
@@ -9,7 +9,7 @@ get_filename_component(SIDLC_INTERFACE_DIRECTORY ${SIDLC_INTERFACE_DIRECTORY}/..
 # =========================================================================
 function(sidl_generate_c)
     set(options)
-    set(oneValueArgs SRCS_VAR HDRS_VAR)
+    set(oneValueArgs HEADER_DIR SRCS_VAR HDRS_VAR)
     set(multiValueArgs FILES)
     cmake_parse_arguments(PARSE_ARGV 0 arg
         "${options}" "${oneValueArgs}" "${multiValueArgs}"
@@ -19,19 +19,27 @@ function(sidl_generate_c)
         message(FATAL_ERROR "sidl_generate_c() called without any SIDL files.")
     endif()
 
+    if (NOT arg_HEADER_DIR)
+        set(arg_HEADER_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
+
     set(_generated_srcs)
     set(_generated_hdrs)
+
+    file(MAKE_DIRECTORY "${arg_HEADER_DIR}")
 
     foreach(sidl_file ${arg_FILES})
         get_filename_component(abs_file ${sidl_file} ABSOLUTE)
         get_filename_component(basename ${sidl_file} NAME_WE)
 
-        set(out_hdr "${CMAKE_CURRENT_BINARY_DIR}/${basename}.h")
-        set(out_src "${CMAKE_CURRENT_BINARY_DIR}/${basename}.c")
+        set(out_hdr "${arg_HEADER_DIR}/${basename}.h")
+        set(out_src "${arg_HEADER_DIR}/${basename}.c")
 
         add_custom_command(
             OUTPUT ${out_hdr} ${out_src}
             COMMAND ${SIDLC_EXECUTABLE} 
+                    --lang=c
+                    --arch=${CMAKE_SYSTEM_PROCESSOR}
                     --header=${out_hdr} 
                     --user-src=${out_src}
                     ${abs_file}

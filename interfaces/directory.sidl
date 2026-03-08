@@ -19,7 +19,7 @@ interface Directory {
             u32 entry_len;
             u16 name_len;
             EntryType type;
-            u8 name[];
+            array<u8> name;
         };
 
         bitfield<u32> CreateFlags {
@@ -47,9 +47,9 @@ interface Directory {
         function Iterate(in u64 cookie, in ptr<Entry> buffer, in u64 buffer_size, out u64 result_count, out u64 next_cookie);
         function FindCookie(in const ptr<u8> name, in u64 name_size, out u64 cookie);
 
-        function CreateNode(in const ptr<u8> name, in u64 name_size, in EntryType type, in const ptr<CreateInfo> info, out u64 new_node_handle);
+        function CreateNode(in const ptr<u8> name, in u64 name_size, in EntryType type, in const ptr<CreateInfo> info, out handle node_handle);
         function CreateSymlink(in const ptr<u8> name, in u64 name_size, in const ptr<u8> target_path, in u64 target_path_size);
-        function CreateLink(in const ptr<u8> name, in u64 name_size, in u64 target_node_handle);
+        function CreateLink(in const ptr<u8> name, in u64 name_size, in handle target_node_handle);
 
         function Remove(in const ptr<u8> name);
         function RemoveByCookie(in u64 cookie);
@@ -57,7 +57,7 @@ interface Directory {
         function Rename(in const ptr<u8> name, in u64 name_size, in u64 new_parent_node_handle, in const ptr<u8> new_name, in u64 new_name_size);
         function RenameByCookie(in u64 cookie, in u64 new_parent_node_handle, in const ptr<u8> new_name, in u64 new_name_size);
 
-        function Lookup(in const ptr<u8> name, in u64 name_size, in LookupFlags flags, out u64 node_handle);
-        function LookupByCookie(in u64 cookie, in LookupFlags flags, out u64 node_handle);
+        function Lookup(in const ptr<u8> name, in u64 name_size, in LookupFlags flags, out handle node_handle);
+        function LookupByCookie(in u64 cookie, in LookupFlags flags, out handle node_handle);
     }
 }

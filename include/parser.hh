@@ -16,10 +16,12 @@ class Parser {
     std::unique_ptr<IdentifierExpressionNode> parse_identifier_expression();
     std::unique_ptr<LiteralExpressionNode> parse_literal_expression();
     std::unique_ptr<AnnotationNode> parse_annotation();
-    std::unique_ptr<AbiversionNode> parse_abiversion();
-    std::unique_ptr<FunctionNode> parse_function();
-    std::unique_ptr<StructNode> parse_struct();
-    std::unique_ptr<BitfieldNode> parse_bitfield();
+    std::unique_ptr<GroupNode> parse_group(InterfaceNode &interface);
+    std::unique_ptr<AbiversionNode> parse_abiversion(GroupNode &group);
+    std::unique_ptr<FunctionNode> parse_function(AbiversionNode &abiversion);
+    std::unique_ptr<StructNode> parse_struct(AbiversionNode &abiversion);
+    std::unique_ptr<BitfieldNode> parse_bitfield(AbiversionNode &abiversion);
+    std::unique_ptr<EnumNode> parse_enum(AbiversionNode &abiversion);
     std::unique_ptr<TypeNode> parse_type();
     std::unique_ptr<ParameterNode> parse_parameter();
 

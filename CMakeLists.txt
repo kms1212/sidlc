@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.13)
 cmake_policy(SET CMP0076 NEW)
 
-include(ExternalProject)
-
 project("sidlc" VERSION 0.1.0 LANGUAGES CXX)
 
 # Project configurations
@@ -41,7 +39,6 @@ target_compile_options(sidlc PUBLIC
         -pedantic-errors
     >
 )
-
 target_include_directories(sidlc PRIVATE "${CMAKE_SOURCE_DIR}/include")
 target_include_directories(sidlc PRIVATE "${CMAKE_BINARY_DIR}")
 
@@ -52,7 +49,7 @@ add_subdirectory(lang)
 # Install
 install(TARGETS sidlc RUNTIME DESTINATION bin)
 install(DIRECTORY interfaces/
-    DESTINATION share/sidl/interfaces
+    DESTINATION lib/sidl/interfaces
     FILES_MATCHING PATTERN "*.sidl"
 )
 install(FILES cmake/UseSIDLC.cmake
