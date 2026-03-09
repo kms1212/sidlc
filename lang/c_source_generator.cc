@@ -46,8 +46,7 @@ void CSourceGenerator::visit(InterfaceNode &node)
     out << "#include <stdint.h>\n\n";
     out << "#include <strata/status.h>\n";
     out << "#include <strata/macros.h>\n";
-    out << "#include <strata/uuid.h>\n";
-    out << "#include <strata/krt.h>\n\n";
+    out << "#include <strata/uuid.h>\n\n";
 
     if (buf_macros.tellp() > 0) {
         out << "/* Constants & Bitmasks */\n";
