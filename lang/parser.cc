@@ -24,13 +24,26 @@ void Parser::consume(Token::Type token_type)
     advance();
 }
 
+void Parser::append_abiversion_or_throw(
+    InterfaceNode &interface, std::unique_ptr<AbiversionNode> abiversion
+)
+{
+    uint64_t expected_version = interface.abiversions.size();
+
+    if (abiversion->version != expected_version) {
+        throw std::runtime_error(
+            "ABI revisions must start at 0 and be contiguous; expected revision "
+            + std::to_string(expected_version) + ", got " + std::to_string(abiversion->version)
+        );
+    }
+
+    interface.abiversions.push_back(std::move(abiversion));
+}
+
 std::unique_ptr<InterfaceNode> Parser::parse()
 {
     try {
         auto node = std::make_unique<InterfaceNode>();
-        auto default_group = std::make_unique<GroupNode>(*node);
-        default_group->name = "Default";
-        default_group->id = node->current_groupid++;
 
         advance();
 
@@ -49,22 +62,14 @@ std::unique_ptr<InterfaceNode> Parser::parse()
         while (current_token.type != Token::Type('}')) {
             switch (current_token.type) {
             case Token::TYPE_KWD_ABIREVISION:
-                default_group->abiversions.push_back(parse_abiversion(*default_group));
+                append_abiversion_or_throw(*node, parse_abiversion(*node));
                 break;
-            case Token::TYPE_KWD_GROUP: {
-                auto group = parse_group(*node);
-                group->id = node->current_groupid++;
-                node->groups.push_back(std::move(group));
-                break;
-            }
             default:
                 throw std::runtime_error(
                     "Unexpected token type " + std::to_string(current_token.type)
                 );
             }
         }
-
-        node->groups.insert(node->groups.begin(), std::move(default_group));
 
         consume(Token::Type('}'));
 
@@ -74,33 +79,6 @@ std::unique_ptr<InterfaceNode> Parser::parse()
                   << current_token.start_column << std::endl;
         return nullptr;
     }
-}
-
-std::unique_ptr<GroupNode> Parser::parse_group(InterfaceNode &interface)
-{
-    auto node = std::make_unique<GroupNode>(interface);
-
-    consume(Token::TYPE_KWD_GROUP);
-
-    expect(Token::TYPE_IDENTIFIER);
-    node->name = current_token.text;
-    advance();
-
-    consume(Token::Type('{'));
-
-    while (current_token.type != Token::Type('}')) {
-        switch (current_token.type) {
-        case Token::TYPE_KWD_ABIREVISION:
-            node->abiversions.push_back(parse_abiversion(*node));
-            break;
-        default:
-            throw std::runtime_error("Unexpected token type " + std::to_string(current_token.type));
-        }
-    }
-
-    consume(Token::Type('}'));
-
-    return node;
 }
 
 std::unique_ptr<IdentifierExpressionNode> Parser::parse_identifier_expression()
@@ -387,14 +365,14 @@ std::unique_ptr<FunctionNode> Parser::parse_function(AbiversionNode &abiversion)
     consume(Token::Type(')'));
     consume(Token::Type(';'));
 
-    node->id = abiversion.group.current_funcid++;
+    node->id = abiversion.interface.current_funcid++;
 
     return node;
 }
 
-std::unique_ptr<AbiversionNode> Parser::parse_abiversion(GroupNode &group)
+std::unique_ptr<AbiversionNode> Parser::parse_abiversion(InterfaceNode &interface)
 {
-    auto node = std::make_unique<AbiversionNode>(group);
+    auto node = std::make_unique<AbiversionNode>(interface);
     auto annotations = std::vector<std::unique_ptr<AnnotationNode>>();
 
     consume(Token::TYPE_KWD_ABIREVISION);

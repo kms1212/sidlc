@@ -1,4 +1,4 @@
-#include <c_source_generator.hh>
+#include <c_user_source_generator.hh>
 
 #include <uuid.h>
 
@@ -7,7 +7,7 @@
 
 #include "config.h"
 
-void CSourceGenerator::visit(InterfaceNode &node)
+void CUserSourceGenerator::visit(InterfaceNode &node)
 {
     macro_interface_name = node.name;
     std::transform(
@@ -32,8 +32,8 @@ void CSourceGenerator::visit(InterfaceNode &node)
         }
     }
 
-    for (const auto &group : node.groups) {
-        group->accept(*this);
+    for (const auto &abi : node.abiversions) {
+        abi->accept(*this);
     }
 
     out << "/* =====================================================================\n";
@@ -62,16 +62,7 @@ void CSourceGenerator::visit(InterfaceNode &node)
     }
 }
 
-void CSourceGenerator::visit(GroupNode &node)
-{
-    buf_macros << "\n/* Group " << node.name << " */\n";
-    buf_functions << "\n/* Group " << node.name << " */\n";
-    for (const auto &abi : node.abiversions) {
-        abi->accept(*this);
-    }
-}
-
-void CSourceGenerator::visit(AbiversionNode &node)
+void CUserSourceGenerator::visit(AbiversionNode &node)
 {
     if (!node.functions.empty()) {
         buf_macros << "\n/* ABI Version " << node.version << " */\n";
@@ -83,7 +74,7 @@ void CSourceGenerator::visit(AbiversionNode &node)
     }
 }
 
-void CSourceGenerator::visit(FunctionNode &node)
+void CUserSourceGenerator::visit(FunctionNode &node)
 {
     buf_macros << "#define FUNCID_" << node.name << " " << node.id << "\n";
 
@@ -219,8 +210,7 @@ void CSourceGenerator::visit(FunctionNode &node)
         }
     }
     buf_functions << "    status = StHandle_Query("
-                     "handle, &interface_uuid, "
-                  << node.abiversion.group.id << ", " << node.abiversion.version
+                     "handle, &interface_uuid, " << node.abiversion.version
                   << ", &funcid_base, NULL);\n";
     buf_functions << "    if (!CHECK_SUCCESS(status)) { return status; }\n";
 

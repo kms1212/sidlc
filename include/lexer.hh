@@ -13,7 +13,6 @@ struct Token {
         TYPE_STRING,
 
         TYPE_KWD_INTERFACE,
-        TYPE_KWD_GROUP,
         TYPE_KWD_ABIREVISION,
         TYPE_KWD_STRUCT,
         TYPE_KWD_BITFIELD,

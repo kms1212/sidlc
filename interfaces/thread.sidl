@@ -14,31 +14,27 @@ interface Thread {
         function GetState(out State state);
         function GetId(out u64 tid);
         function Terminate(in status exit_code);
-    }
 
-    group self {
-        abirevision 0 {
-            bitfield<u32> WaitFlags {
-                POLL : 1;
-                MUST_TERMINATE : 1;
-            };
+        bitfield<u32> WaitFlags {
+            POLL : 1;
+            MUST_TERMINATE : 1;
+        };
 
-            struct WaitVector {
-                handle target;
-                WaitFlags flags;
-                State state;
-                u32 exit_code;
-            };
+        struct WaitVector {
+            handle target;
+            WaitFlags flags;
+            State state;
+            u32 exit_code;
+        };
 
-            enum<u32> RegisterId {
-                @arch("x86_64") FS = 0,
-                @arch("x86_64") GS = 1,
-            };
+        enum<u32> RegisterId {
+            @arch("x86_64") FS = 0,
+            @arch("x86_64") GS = 1,
+        };
 
-            function SetTlsBase(in RegisterId register_id, in ptr<opaque> tls_address);
-            function GetTlsBase(in RegisterId register_id, out ptr<opaque> tls_address);
+        function SetTlsBase(in RegisterId register_id, in ptr<opaque> tls_address);
+        function GetTlsBase(in RegisterId register_id, out ptr<opaque> tls_address);
 
-            function Wait(inout ptr<WaitVector> vector, in u64 vector_size, in u64 timeout_ms);
-        }
+        function Wait(inout ptr<WaitVector> vector, in u64 vector_size, in u64 timeout_ms);
     }
 }

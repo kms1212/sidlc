@@ -12,12 +12,14 @@ class Parser {
     void advance();
     void expect(Token::Type token_type);
     void consume(Token::Type token_type);
+    void append_abiversion_or_throw(
+        InterfaceNode &interface, std::unique_ptr<AbiversionNode> abiversion
+    );
 
     std::unique_ptr<IdentifierExpressionNode> parse_identifier_expression();
     std::unique_ptr<LiteralExpressionNode> parse_literal_expression();
     std::unique_ptr<AnnotationNode> parse_annotation();
-    std::unique_ptr<GroupNode> parse_group(InterfaceNode &interface);
-    std::unique_ptr<AbiversionNode> parse_abiversion(GroupNode &group);
+    std::unique_ptr<AbiversionNode> parse_abiversion(InterfaceNode &interface);
     std::unique_ptr<FunctionNode> parse_function(AbiversionNode &abiversion);
     std::unique_ptr<StructNode> parse_struct(AbiversionNode &abiversion);
     std::unique_ptr<BitfieldNode> parse_bitfield(AbiversionNode &abiversion);

@@ -1,5 +1,5 @@
-#ifndef __C_SOURCE_GENERATOR_HH__
-#define __C_SOURCE_GENERATOR_HH__
+#ifndef __C_USER_SOURCE_GENERATOR_HH__
+#define __C_USER_SOURCE_GENERATOR_HH__
 
 #include <iostream>
 #include <sstream>
@@ -7,7 +7,7 @@
 
 #include <ast.hh>
 
-class CSourceGenerator : public AstVisitor {
+class CUserSourceGenerator : public AstVisitor {
     std::ostream &out;
     std::string prefix;
     std::string macro_interface_name;
@@ -17,15 +17,14 @@ class CSourceGenerator : public AstVisitor {
     bool make_weak_symbols;
 
   public:
-    CSourceGenerator(std::ostream &out, const std::string &header_name, bool make_weak_symbols)
+    CUserSourceGenerator(std::ostream &out, const std::string &header_name, bool make_weak_symbols)
         : out(out), header_name(header_name), make_weak_symbols(make_weak_symbols)
     {
     }
 
     void visit(InterfaceNode &node) override;
-    void visit(GroupNode &node) override;
     void visit(AbiversionNode &node) override;
     void visit(FunctionNode &node) override;
 };
 
-#endif  // __C_SOURCE_GENERATOR_HH__
+#endif  // __C_USER_SOURCE_GENERATOR_HH__

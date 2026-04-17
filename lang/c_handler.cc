@@ -6,11 +6,14 @@
 
 #include <ast.hh>
 #include <c_header_generator.hh>
-#include <c_source_generator.hh>
+#include <c_user_source_generator.hh>
+#include <c_module_source_generator.hh>
 
 static std::string header_path;
 static std::string user_src_path;
 static std::string user_src_header_path;
+static std::string module_src_path;
+static std::string module_src_header_path;
 static bool make_weak_symbols = false;
 
 bool c_handle_option(const std::string &arg)
@@ -27,11 +30,17 @@ bool c_handle_option(const std::string &arg)
     } else if (arg.rfind("--user-src-header-path=", 0) == 0) {
         user_src_header_path = arg.substr(23);
         return true;
+    } else if (arg.rfind("--module-src=", 0) == 0) {
+        module_src_path = arg.substr(13);
+        return true;
+    } else if (arg.rfind("--module-src-header-path=", 0) == 0) {
+        module_src_header_path = arg.substr(25);
+        return true;
     }
     return false;
 }
 
-bool c_generate(InterfaceNode *interface)
+bool c_generate_user(InterfaceNode *interface)
 {
     if (!header_path.empty()) {
         std::ofstream header_file(header_path);
@@ -53,7 +62,36 @@ bool c_generate(InterfaceNode *interface)
             std::cerr << "Error: Could not open file " << user_src_path << std::endl;
             return false;
         }
-        CSourceGenerator source_gen(user_src_file, user_src_header_path, make_weak_symbols);
+        CUserSourceGenerator source_gen(user_src_file, user_src_header_path, make_weak_symbols);
+        interface->accept(source_gen);
+    }
+
+    return true;
+}
+
+bool c_generate_module(InterfaceNode *interface)
+{
+    if (!header_path.empty()) {
+        std::ofstream header_file(header_path);
+        if (!header_file.is_open()) {
+            std::cerr << "Error: Could not open file " << header_path << std::endl;
+            return false;
+        }
+        CHeaderGenerator header_gen(header_file);
+        interface->accept(header_gen);
+    }
+
+    if (module_src_header_path.empty()) {
+        module_src_header_path = header_path.substr(header_path.rfind("/") + 1);
+    }
+
+    if (!module_src_path.empty()) {
+        std::ofstream module_src_file(module_src_path);
+        if (!module_src_file.is_open()) {
+            std::cerr << "Error: Could not open file " << module_src_path << std::endl;
+            return false;
+        }
+        CModuleSourceGenerator source_gen(module_src_file, module_src_header_path);
         interface->accept(source_gen);
     }
 

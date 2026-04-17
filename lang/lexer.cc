@@ -69,8 +69,6 @@ Token Lexer::next_token()
         Token::Type type = Token::TYPE_IDENTIFIER;
         if (text == "interface") {
             type = Token::TYPE_KWD_INTERFACE;
-        } else if (text == "group") {
-            type = Token::TYPE_KWD_GROUP;
         } else if (text == "abirevision") {
             type = Token::TYPE_KWD_ABIREVISION;
         } else if (text == "struct") {

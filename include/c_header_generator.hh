@@ -20,7 +20,6 @@ class CHeaderGenerator : public AstVisitor {
     CHeaderGenerator(std::ostream &out) : out(out) {}
 
     void visit(InterfaceNode &node) override;
-    void visit(GroupNode &node) override;
     void visit(AbiversionNode &node) override;
     void visit(StructNode &node) override;
     void visit(BitfieldNode &node) override;

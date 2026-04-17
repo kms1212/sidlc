@@ -31,7 +31,8 @@ static const std::map<std::string, LangInfo> lang_infos = {
                 { "status", { "StStatus", 4, 4 } },
             },
             c_handle_option,
-            c_generate,
+            c_generate_user,
+            c_generate_module,
         },
     },
 };
@@ -56,8 +57,10 @@ void print_usage(const char *argv0)
            "  C: (--lang=c)\n"
            "    --weak                        Make weak symbols\n"
            "    --header=<path>               Output header file path (.h)\n"
-           "    --user-src=<path>             Output source file path (.c)\n"
-           "    --user-src-header-path=<path> Include path to be written in the generated source\n";
+           "    --user-src=<path>             Output user source file path (.c)\n"
+           "    --user-src-header-path=<path> Include path to be written in the generated user source\n"
+           "    --module-src=<path>           Output module source file path (.c)\n"
+           "    --module-src-header-path=<path> Include path to be written in the generated module source\n";
 }
 
 int main(int argc, char **argv)
@@ -141,7 +144,11 @@ int main(int argc, char **argv)
 
     auto interface = parser.parse();
 
-    if (!g_current_lang_info->generate(interface.get())) {
+    if (!g_current_lang_info->generate_user(interface.get())) {
+        return 1;
+    }
+
+    if (!g_current_lang_info->generate_module(interface.get())) {
         return 1;
     }
 

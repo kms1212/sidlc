@@ -90,8 +90,8 @@ void CHeaderGenerator::visit(InterfaceNode &node)
         }
     }
 
-    for (const auto &group : node.groups) {
-        group->accept(*this);
+    for (const auto &abi : node.abiversions) {
+        abi->accept(*this);
     }
 
     out << "/* =====================================================================\n";
@@ -123,27 +123,6 @@ void CHeaderGenerator::visit(InterfaceNode &node)
         out << buf_functions.str() << "\n";
     }
     out << "#endif /* __SIDL_INTERFACE_" << macro_interface_name << "_H__ */\n";
-}
-
-void CHeaderGenerator::visit(GroupNode &node)
-{
-    std::string macro_group_name(node.name);
-    std::transform(
-        macro_group_name.begin(),
-        macro_group_name.end(),
-        macro_group_name.begin(),
-        ::toupper
-    );
-
-    buf_macros << "\n/* Group " << node.name << " */\n";
-    buf_functions << "\n/* Group " << node.name << " */\n";
-
-    buf_macros << "#define " << macro_interface_name << "_GROUP_" << macro_group_name << " ("
-               << node.id << ")\n";
-
-    for (const auto &abi : node.abiversions) {
-        abi->accept(*this);
-    }
 }
 
 void CHeaderGenerator::visit(AbiversionNode &node)

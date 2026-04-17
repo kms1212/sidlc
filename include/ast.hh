@@ -6,7 +6,6 @@
 
 struct InterfaceNode;
 struct AnnotationNode;
-struct GroupNode;
 struct AbiversionNode;
 struct StructNode;
 struct BitfieldNode;
@@ -32,7 +31,6 @@ public:
 
     virtual void visit(InterfaceNode &node) {};
     virtual void visit(AnnotationNode &node) {};
-    virtual void visit(GroupNode &node) {};
     virtual void visit(AbiversionNode &node) {};
     virtual void visit(StructNode &node) {};
     virtual void visit(BitfieldNode &node) {};
@@ -229,25 +227,9 @@ struct AbiversionNode : public AstNode {
     std::vector<std::unique_ptr<StructNode>> structs;
     std::vector<std::unique_ptr<BitfieldNode>> bitfields;
     std::vector<std::unique_ptr<EnumNode>> enums;
-    GroupNode &group;
-
-    AbiversionNode(GroupNode &group) : group(group) {}
-
-    void accept(AstVisitor &visitor) override
-    {
-        visitor.visit(*this);
-    }
-};
-
-struct GroupNode : public AstNode {
-    std::string_view name;
-    std::vector<std::unique_ptr<AnnotationNode>> annotations;
-    std::vector<std::unique_ptr<AbiversionNode>> abiversions;
     InterfaceNode &interface;
-    uint32_t id;
-    uint32_t current_funcid;
 
-    GroupNode(InterfaceNode &interface) : interface(interface), current_funcid(0) {}
+    AbiversionNode(InterfaceNode &interface) : interface(interface) {}
 
     void accept(AstVisitor &visitor) override
     {
@@ -258,10 +240,10 @@ struct GroupNode : public AstNode {
 struct InterfaceNode : public AstNode {
     std::string_view name;
     std::vector<std::unique_ptr<AnnotationNode>> annotations;
-    std::vector<std::unique_ptr<GroupNode>> groups;
-    uint32_t current_groupid;
+    std::vector<std::unique_ptr<AbiversionNode>> abiversions;
+    uint32_t current_funcid;
 
-    InterfaceNode() : current_groupid(0) {}
+    InterfaceNode() : current_funcid(0) {}
 
     void accept(AstVisitor &visitor) override
     {
