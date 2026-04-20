@@ -5,6 +5,7 @@
 
 #include <uuid.h>
 
+#include <arch_abi.hh>
 #include <ast.hh>
 
 #include "config.h"
@@ -42,12 +43,21 @@ void CHeaderGenerator::visit(InterfaceNode &node)
     const bool is_type_header = mode == Mode::TYPE;
     const bool is_user_header = mode == Mode::USER;
     const bool is_module_header = mode == Mode::MODULE;
+    size_t module_arg_slot_count = 0;
 
     prefix.clear();
     macro_prefix.clear();
     macro_interface_name.clear();
     total_funcid_span = 0;
     abi_revision_count = 0;
+
+    if (is_module_header) {
+        if (!g_current_arch_abi || g_current_arch_abi->max_reg_args <= 2) {
+            throw std::runtime_error("Invalid architecture ABI");
+        }
+
+        module_arg_slot_count = g_current_arch_abi->max_reg_args - 2;
+    }
 
     buf_macros.str("");
     buf_macros.clear();
@@ -208,7 +218,7 @@ void CHeaderGenerator::visit(InterfaceNode &node)
         out << "    void *context __inout,\n";
         out << "    StHandle handle __in,\n";
         out << "    uint32_t funcid __in,\n";
-        out << "    const long args[6]\n";
+        out << "    const long args[" << module_arg_slot_count << "]\n";
         out << ");\n\n";
         out << "#endif /* __SIDL_INTERFACE_" << macro_interface_name << "_MODULE_H__ */\n";
         return;

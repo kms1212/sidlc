@@ -6,6 +6,7 @@
 
 #include <uuid.h>
 
+#include <arch_abi.hh>
 #include <ast.hh>
 #include <lang_info.hh>
 
@@ -78,23 +79,122 @@ bool CModuleSourceGenerator::parameter_uses_pointer_argument(const ParameterNode
         node.type->is_array;
 }
 
+bool CModuleSourceGenerator::is_scalar_in_register_param(const ParameterNode &node)
+{
+    TypeValueInfo type_info;
+
+    if (node.direction != ParameterNode::Direction::IN) return false;
+    if (node.type->is_ptr || node.type->is_array) return false;
+
+    type_info = get_type_value_info(*node.type);
+    return type_info.type_size > 0 && type_info.type_size <= g_current_arch_abi->pointer_size;
+}
+
 void CModuleSourceGenerator::write_dispatch_case(FunctionNode &node)
 {
+    bool can_use_call_reg = node.parameters.size() <= module_arg_slot_count;
+    std::vector<ParameterNode *> peeled_params;
+    std::vector<ParameterNode *> packed_in_params;
+    std::vector<ParameterNode *> packed_out_params;
+    std::map<ParameterNode *, size_t> peeled_indexes;
+
+    for (const auto &param : node.parameters) {
+        bool is_scalar_in_reg = is_scalar_in_register_param(*param);
+
+        if (!is_scalar_in_reg) {
+            can_use_call_reg = false;
+        }
+
+        if (param->direction == ParameterNode::Direction::OUT) {
+            packed_out_params.push_back(param.get());
+            continue;
+        }
+
+        if (is_scalar_in_reg && peeled_params.size() < module_peel_slot_count) {
+            peeled_params.push_back(param.get());
+            continue;
+        }
+
+        packed_in_params.push_back(param.get());
+    }
+
+    for (size_t i = 0; i < peeled_params.size(); ++i) {
+        peeled_indexes[peeled_params[i]] = i;
+    }
+
     out << "    case " << node.id << ": {\n";
-    if (node.parameters.empty()) {
-        out << "        (void)args;\n";
-    } else {
-        out << "\n";
+    if (node.parameters.empty()) out << "        (void)args;\n";
+    out << "\n";
+
+    if (!can_use_call_reg) {
+        if (packed_in_params.size() > 1) {
+            out << "        struct StSidlP_InPack {\n";
+            for (const auto *param : packed_in_params) {
+                out << "            " << get_parameter_c_type(*param) << " " << param->name
+                    << ";\n";
+            }
+            out << "        };\n";
+            out << "        const struct StSidlP_InPack *packed_in = "
+                   "(const struct StSidlP_InPack *)(uintptr_t)args[0];\n";
+        }
+        if (packed_out_params.size() > 1) {
+            out << "        struct StSidlP_OutPack {\n";
+            for (const auto *param : packed_out_params) {
+                out << "            " << to_c_type(prefix, *param->type) << " " << param->name
+                    << ";\n";
+            }
+            out << "        };\n";
+            out << "        struct StSidlP_OutPack *packed_out = "
+                   "(struct StSidlP_OutPack *)(uintptr_t)args[1];\n";
+        }
+
+        if (packed_in_params.size() > 1 ||
+            (packed_in_params.size() == 1 && !packed_in_params.front()->type->is_ptr)) {
+            out << "        if ((const void *)(uintptr_t)args[0] == NULL) {\n";
+            out << "            return STATUS_INVALID_VALUE;\n";
+            out << "        }\n";
+        }
+        if (packed_out_params.size() > 1) {
+            out << "        if ((void *)(uintptr_t)args[1] == NULL) {\n";
+            out << "            return STATUS_INVALID_VALUE;\n";
+            out << "        }\n";
+        }
+
+        if (!packed_in_params.empty() || !packed_out_params.empty()) {
+            out << "\n";
+        }
     }
 
     for (size_t i = 0; i < node.parameters.size(); ++i) {
         const auto &param = node.parameters[i];
         std::string exact_type = get_parameter_c_type(*param);
-        std::string arg_expr =
-            parameter_uses_pointer_argument(*param) ? "(uintptr_t)args[" : "args[";
+        std::string arg_expr;
+        auto peeled_it = peeled_indexes.find(param.get());
+
+        if (can_use_call_reg) {
+            arg_expr = parameter_uses_pointer_argument(*param) ? "(uintptr_t)args[" : "args[";
+            arg_expr += std::to_string(i);
+            arg_expr += "]";
+        } else if (param->direction == ParameterNode::Direction::OUT) {
+            if (packed_out_params.size() == 1) {
+                arg_expr = "(uintptr_t)args[1]";
+            } else {
+                arg_expr = "&packed_out->" + std::string(param->name);
+            }
+        } else if (peeled_it != peeled_indexes.end()) {
+            arg_expr = "args[" + std::to_string(2 + peeled_it->second) + "]";
+        } else if (packed_in_params.size() == 1) {
+            if (packed_in_params.front()->type->is_ptr) {
+                arg_expr = "(uintptr_t)args[0]";
+            } else {
+                arg_expr = "*(const " + exact_type + " *)(uintptr_t)args[0]";
+            }
+        } else {
+            arg_expr = "packed_in->" + std::string(param->name);
+        }
 
         out << "        " << exact_type << " " << param->name << " = (" << exact_type << ")"
-            << arg_expr << i << "];\n";
+            << arg_expr << ";\n";
     }
 
     out << "\n        return typed_vtable->" << node.name << "(context, handle";
@@ -113,6 +213,12 @@ void CModuleSourceGenerator::visit(InterfaceNode &node)
     abi_spans.clear();
     functions_by_id.clear();
     register_builtin_type_infos();
+
+    if (!g_current_arch_abi || g_current_arch_abi->max_reg_args <= 2) {
+        throw std::runtime_error("Invalid architecture ABI");
+    }
+    module_arg_slot_count = g_current_arch_abi->max_reg_args - 2;
+    module_peel_slot_count = module_arg_slot_count > 2 ? module_arg_slot_count - 2 : 0;
 
     macro_interface_name = node.name;
     std::transform(
@@ -156,7 +262,7 @@ void CModuleSourceGenerator::visit(InterfaceNode &node)
     out << "    void *context __inout,\n";
     out << "    StHandle handle __in,\n";
     out << "    uint32_t funcid __in,\n";
-    out << "    const long args[6]\n";
+    out << "    const long args[" << module_arg_slot_count << "]\n";
     out << ")\n";
     out << "{\n";
     out << "    const " << prefix << "ModuleVTable *typed_vtable;\n";

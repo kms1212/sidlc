@@ -27,11 +27,14 @@ class CModuleSourceGenerator : public AstVisitor {
     std::vector<uint32_t> abi_spans;
     std::vector<FunctionNode *> functions_by_id;
     std::map<std::string, TypeValueInfo> type_value_infos;
+    size_t module_arg_slot_count = 0;
+    size_t module_peel_slot_count = 0;
 
     void register_builtin_type_infos();
     TypeValueInfo get_type_value_info(TypeNode &node);
     std::string get_parameter_c_type(const ParameterNode &node);
     bool parameter_uses_pointer_argument(const ParameterNode &node);
+    bool is_scalar_in_register_param(const ParameterNode &node);
     void write_dispatch_case(FunctionNode &node);
 
   public:

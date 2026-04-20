@@ -1,4 +1,10 @@
-find_program(SIDLC_EXECUTABLE sidlc REQUIRED)
+if(NOT SIDLC_EXECUTABLE)
+    find_program(SIDLC_EXECUTABLE sidlc)
+endif()
+
+if(NOT SIDLC_EXECUTABLE)
+    message(FATAL_ERROR "sidlc executable not found. Set SIDLC_EXECUTABLE or install sidlc in PATH.")
+endif()
 
 get_filename_component(SIDLC_INTERFACE_DIRECTORY ${SIDLC_EXECUTABLE} DIRECTORY)
 get_filename_component(SIDLC_INTERFACE_DIRECTORY ${SIDLC_INTERFACE_DIRECTORY}/../lib/sidl/interfaces/ ABSOLUTE)
@@ -91,6 +97,7 @@ function(sidl_generate_c)
             COMMENT "Compiling SIDL interface: ${basename}.sidl"
             VERBATIM
         )
+        set_source_files_properties(${outputs} PROPERTIES GENERATED TRUE)
     endforeach()
 
     set(${arg_SRCS_VAR} ${_generated_srcs} PARENT_SCOPE)
