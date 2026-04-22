@@ -180,7 +180,7 @@ void CUserSourceGenerator::visit(FunctionNode &node)
                     break;
                 }
             }
-            buf_functions << "    } __packed in = {\n";
+            buf_functions << "    } in = {\n";
             for (const auto &param : packed_in_params) {
                 if (param->type->is_ptr) {
                     buf_functions << "        ." << param->name << " = _" << param->name << ",\n";
@@ -203,7 +203,7 @@ void CUserSourceGenerator::visit(FunctionNode &node)
                                   << param->name << ";\n";
                 }
             }
-            buf_functions << "    } __packed out;\n";
+            buf_functions << "    } out;\n";
         } else if (!packed_out_params.front()->type->is_ptr) {
             buf_functions << "    " << to_c_type(prefix, *packed_out_params.front()->type)
                           << " out;\n";
