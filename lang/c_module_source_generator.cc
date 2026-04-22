@@ -94,8 +94,8 @@ void CModuleSourceGenerator::write_dispatch_case(FunctionNode &node)
 {
     bool can_use_call_reg = node.parameters.size() <= module_arg_slot_count;
     std::vector<ParameterNode *> peeled_params;
-    std::vector<ParameterNode *> packed_in_params;
-    std::vector<ParameterNode *> packed_out_params;
+    std::vector<ParameterNode *> in_params;
+    std::vector<ParameterNode *> out_params;
     std::map<ParameterNode *, size_t> peeled_indexes;
 
     for (const auto &param : node.parameters) {
@@ -106,7 +106,7 @@ void CModuleSourceGenerator::write_dispatch_case(FunctionNode &node)
         }
 
         if (param->direction == ParameterNode::Direction::OUT) {
-            packed_out_params.push_back(param.get());
+            out_params.push_back(param.get());
             continue;
         }
 
@@ -115,7 +115,7 @@ void CModuleSourceGenerator::write_dispatch_case(FunctionNode &node)
             continue;
         }
 
-        packed_in_params.push_back(param.get());
+        in_params.push_back(param.get());
     }
 
     for (size_t i = 0; i < peeled_params.size(); ++i) {
@@ -127,40 +127,38 @@ void CModuleSourceGenerator::write_dispatch_case(FunctionNode &node)
     out << "\n";
 
     if (!can_use_call_reg) {
-        if (packed_in_params.size() > 1) {
-            out << "        struct StSidlP_InPack {\n";
-            for (const auto *param : packed_in_params) {
+        if (in_params.size() > 1) {
+            out << "        const struct {\n";
+            for (const auto *param : in_params) {
                 out << "            " << get_parameter_c_type(*param) << " " << param->name
                     << ";\n";
             }
-            out << "        };\n";
-            out << "        const struct StSidlP_InPack *packed_in = "
-                   "(const struct StSidlP_InPack *)(uintptr_t)args[0];\n";
+            out << "        } *in = "
+                   "(const void *)(uintptr_t)args[0];\n";
         }
-        if (packed_out_params.size() > 1) {
-            out << "        struct StSidlP_OutPack {\n";
-            for (const auto *param : packed_out_params) {
+        if (out_params.size() > 1) {
+            out << "        struct {\n";
+            for (const auto *param : out_params) {
                 out << "            " << to_c_type(prefix, *param->type) << " " << param->name
                     << ";\n";
             }
-            out << "        };\n";
-            out << "        struct StSidlP_OutPack *packed_out = "
-                   "(struct StSidlP_OutPack *)(uintptr_t)args[1];\n";
+            out << "        } *out = "
+                   "(void *)(uintptr_t)args[1];\n";
         }
 
-        if (packed_in_params.size() > 1 ||
-            (packed_in_params.size() == 1 && !packed_in_params.front()->type->is_ptr)) {
+        if (in_params.size() > 1 ||
+            (in_params.size() == 1 && !in_params.front()->type->is_ptr)) {
             out << "        if ((const void *)(uintptr_t)args[0] == NULL) {\n";
             out << "            return STATUS_INVALID_VALUE;\n";
             out << "        }\n";
         }
-        if (packed_out_params.size() > 1) {
+        if (out_params.size() > 1) {
             out << "        if ((void *)(uintptr_t)args[1] == NULL) {\n";
             out << "            return STATUS_INVALID_VALUE;\n";
             out << "        }\n";
         }
 
-        if (!packed_in_params.empty() || !packed_out_params.empty()) {
+        if (!in_params.empty() || !out_params.empty()) {
             out << "\n";
         }
     }
@@ -176,21 +174,21 @@ void CModuleSourceGenerator::write_dispatch_case(FunctionNode &node)
             arg_expr += std::to_string(i);
             arg_expr += "]";
         } else if (param->direction == ParameterNode::Direction::OUT) {
-            if (packed_out_params.size() == 1) {
+            if (out_params.size() == 1) {
                 arg_expr = "(uintptr_t)args[1]";
             } else {
-                arg_expr = "&packed_out->" + std::string(param->name);
+                arg_expr = "&out->" + std::string(param->name);
             }
         } else if (peeled_it != peeled_indexes.end()) {
             arg_expr = "args[" + std::to_string(2 + peeled_it->second) + "]";
-        } else if (packed_in_params.size() == 1) {
-            if (packed_in_params.front()->type->is_ptr) {
+        } else if (in_params.size() == 1) {
+            if (in_params.front()->type->is_ptr) {
                 arg_expr = "(uintptr_t)args[0]";
             } else {
                 arg_expr = "*(const " + exact_type + " *)(uintptr_t)args[0]";
             }
         } else {
-            arg_expr = "packed_in->" + std::string(param->name);
+            arg_expr = "in->" + std::string(param->name);
         }
 
         out << "        " << exact_type << " " << param->name << " = (" << exact_type << ")"
@@ -225,9 +223,7 @@ void CModuleSourceGenerator::visit(InterfaceNode &node)
         macro_interface_name.begin(),
         macro_interface_name.end(),
         macro_interface_name.begin(),
-        [](unsigned char ch) {
-            return static_cast<char>(std::toupper(ch));
-        }
+        ::toupper
     );
 
     for (const auto &anno : node.annotations) {

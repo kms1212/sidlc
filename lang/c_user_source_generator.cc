@@ -127,8 +127,8 @@ void CUserSourceGenerator::visit(FunctionNode &node)
     }
 
     std::vector<ParameterNode *> peeled_params;
-    std::vector<ParameterNode *> packed_in_params;
-    std::vector<ParameterNode *> packed_out_params;
+    std::vector<ParameterNode *> in_params;
+    std::vector<ParameterNode *> out_params;
 
     for (const auto &param : node.parameters) {
         bool is_scalar = param->direction == ParameterNode::Direction::IN && !param->type->is_ptr &&
@@ -139,12 +139,12 @@ void CUserSourceGenerator::visit(FunctionNode &node)
         }
 
         if (param->direction == ParameterNode::Direction::OUT) {
-            packed_out_params.push_back(param.get());
+            out_params.push_back(param.get());
         } else {
             if (is_scalar && peeled_params.size() < k_peel) {
                 peeled_params.push_back(param.get());
             } else {
-                packed_in_params.push_back(param.get());
+                in_params.push_back(param.get());
             }
         }
     }
@@ -153,10 +153,10 @@ void CUserSourceGenerator::visit(FunctionNode &node)
     buf_functions << "    StStatus status;\n";
     buf_functions << "    uint32_t funcid_base;\n";
 
-    if (!can_use_call_reg && !packed_in_params.empty()) {
-        if (packed_in_params.size() > 1) {
+    if (!can_use_call_reg && !in_params.empty()) {
+        if (in_params.size() > 1) {
             buf_functions << "    struct {\n";
-            for (const auto &param : packed_in_params) {
+            for (const auto &param : in_params) {
                 switch (param->direction) {
                 case ParameterNode::Direction::IN:
                     if (param->type->is_ptr) {
@@ -181,7 +181,7 @@ void CUserSourceGenerator::visit(FunctionNode &node)
                 }
             }
             buf_functions << "    } in = {\n";
-            for (const auto &param : packed_in_params) {
+            for (const auto &param : in_params) {
                 if (param->type->is_ptr) {
                     buf_functions << "        ." << param->name << " = _" << param->name << ",\n";
                 } else {
@@ -191,10 +191,10 @@ void CUserSourceGenerator::visit(FunctionNode &node)
             buf_functions << "    };\n";
         }
     }
-    if (!can_use_call_reg && !packed_out_params.empty()) {
-        if (packed_out_params.size() > 1) {
+    if (!can_use_call_reg && !out_params.empty()) {
+        if (out_params.size() > 1) {
             buf_functions << "    struct {\n";
-            for (const auto &param : packed_out_params) {
+            for (const auto &param : out_params) {
                 if (param->type->is_ptr) {
                     buf_functions << "        " << to_c_type(prefix, *param->type) << param->name
                                   << ";\n";
@@ -204,8 +204,8 @@ void CUserSourceGenerator::visit(FunctionNode &node)
                 }
             }
             buf_functions << "    } out;\n";
-        } else if (!packed_out_params.front()->type->is_ptr) {
-            buf_functions << "    " << to_c_type(prefix, *packed_out_params.front()->type)
+        } else if (!out_params.front()->type->is_ptr) {
+            buf_functions << "    " << to_c_type(prefix, *out_params.front()->type)
                           << " out;\n";
         }
     }
@@ -224,12 +224,12 @@ void CUserSourceGenerator::visit(FunctionNode &node)
     } else {
         buf_functions << "    status = StHandle_CallN(handle, funcid_base + FUNCID_" << node.name
                       << ", ";
-        if (!packed_in_params.empty()) {
-            if (packed_in_params.size() == 1) {
-                if (packed_in_params.front()->type->is_ptr) {
-                    buf_functions << "(const void *)_" << packed_in_params.front()->name << ", ";
+        if (!in_params.empty()) {
+            if (in_params.size() == 1) {
+                if (in_params.front()->type->is_ptr) {
+                    buf_functions << "(const void *)_" << in_params.front()->name << ", ";
                 } else {
-                    buf_functions << "(const void *)&_" << packed_in_params.front()->name << ", ";
+                    buf_functions << "(const void *)&_" << in_params.front()->name << ", ";
                 }
             } else {
                 buf_functions << "(const void *)&in, ";
@@ -237,10 +237,10 @@ void CUserSourceGenerator::visit(FunctionNode &node)
         } else {
             buf_functions << "NULL, ";
         }
-        if (!packed_out_params.empty()) {
-            if (packed_out_params.size() == 1) {
-                if (packed_out_params.front()->type->is_ptr) {
-                    buf_functions << "(void *)_" << packed_out_params.front()->name << ", ";
+        if (!out_params.empty()) {
+            if (out_params.size() == 1) {
+                if (out_params.front()->type->is_ptr) {
+                    buf_functions << "(void *)_" << out_params.front()->name << ", ";
                 } else {
                     buf_functions << "(void *)&out, ";
                 }
@@ -264,15 +264,15 @@ void CUserSourceGenerator::visit(FunctionNode &node)
     }
     buf_functions << "    if (!CHECK_SUCCESS(status)) { return status; }\n";
 
-    if (!can_use_call_reg && !packed_out_params.empty()) {
-        if (packed_out_params.size() == 1) {
-            auto param = packed_out_params.front();
+    if (!can_use_call_reg && !out_params.empty()) {
+        if (out_params.size() == 1) {
+            auto param = out_params.front();
             if (!param->type->is_ptr) {
                 buf_functions << "    if (_" << param->name << " != NULL) "
                               << "{ *_" << param->name << " = out; }\n";
             }
         } else {
-            for (const auto &param : packed_out_params) {
+            for (const auto &param : out_params) {
                 buf_functions << "    if (_" << param->name << " != NULL) "
                               << "{ *_" << param->name << " = out." << param->name << "; }\n";
             }
