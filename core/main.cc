@@ -56,15 +56,19 @@ void print_usage(const char *argv0)
            "Per-language options:\n"
            "  C: (--lang=c)\n"
            "    --weak                        Make weak symbols\n"
-           "    --type-header=<path>          Output shared type header file path (.h)\n"
-           "    --user-header=<path>          Output user header file path (.h)\n"
-           "    --user-header-type-path=<p>   Include path to be written in the generated user header\n"
-           "    --module-header=<path>        Output module header file path (.h)\n"
-           "    --module-header-type-path=<p> Include path to be written in the generated module header\n"
-           "    --user-src=<path>             Output user source file path (.c)\n"
-           "    --user-src-header-path=<path> Include path to be written in the generated user source\n"
-           "    --module-src=<path>           Output module source file path (.c)\n"
-           "    --module-src-header-path=<path> Include path to be written in the generated module source\n";
+           "    --type-header=<path>             Output shared type header file path (.h)\n"
+           "    --client-header=<path>           Output client header file path (.h)\n"
+           "    --client-header-type-path=<p>    Include path for the generated client header\n"
+           "    --client-src=<path>              Output client source file path (.c)\n"
+           "    --client-src-header-path=<path>  Include path for the generated client source\n"
+           "    --server-header=<path>           Output server header file path (.h)\n"
+           "    --server-header-type-path=<p>    Include path for the generated server header\n"
+           "    --server-src=<path>              Output server source file path (.c)\n"
+           "    --server-src-header-path=<path>  Include path for the generated server source\n"
+           "    --server-client-header=<path>    Output server-client header file path (.h)\n"
+           "    --server-client-header-type-path=<p> Include path for the generated server-client header\n"
+           "    --server-client-src=<path>       Output server-client source file path (.c)\n"
+           "    --server-client-src-header-path=<p> Include path for the generated server-client source\n";
 }
 
 int main(int argc, char **argv)

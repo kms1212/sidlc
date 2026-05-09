@@ -48,10 +48,6 @@ add_subdirectory(lang)
 
 # Install
 install(TARGETS sidlc RUNTIME DESTINATION bin)
-install(DIRECTORY interfaces/
-    DESTINATION lib/sidl/interfaces
-    FILES_MATCHING PATTERN "*.sidl"
-)
 install(FILES cmake/UseSIDLC.cmake
     DESTINATION share/cmake-${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}/Modules
 )

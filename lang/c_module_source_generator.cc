@@ -253,7 +253,7 @@ void CModuleSourceGenerator::visit(InterfaceNode &node)
 
     out << "#include \"" << header_name << "\"\n\n";
 
-    out << "StStatus " << prefix << "ModuleDispatchArgs(\n";
+    out << "StStatus " << prefix << "ServerDispatchArgs(\n";
     out << "    const void *vtable __in,\n";
     out << "    void *context __inout,\n";
     out << "    StHandle handle __in,\n";
@@ -261,7 +261,7 @@ void CModuleSourceGenerator::visit(InterfaceNode &node)
     out << "    const long args[" << module_arg_slot_count << "]\n";
     out << ")\n";
     out << "{\n";
-    out << "    const " << prefix << "ModuleVTable *typed_vtable;\n";
+    out << "    const " << prefix << "ServerVTable *typed_vtable;\n";
     out << "    const uintptr_t *vtable_slots;\n";
     out << "\n";
     out << "    if (vtable == NULL || args == NULL) {\n";
@@ -274,7 +274,7 @@ void CModuleSourceGenerator::visit(InterfaceNode &node)
     out << "    if (vtable_slots[funcid] == 0) {\n";
     out << "        return STATUS_NOT_IMPLEMENTED;\n";
     out << "    }\n";
-    out << "    typed_vtable = (const " << prefix << "ModuleVTable *)vtable;\n\n";
+    out << "    typed_vtable = (const " << prefix << "ServerVTable *)vtable;\n\n";
     out << "    switch (funcid) {\n";
     for (FunctionNode *function : functions_by_id) {
         if (!function) {

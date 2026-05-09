@@ -11,14 +11,18 @@
 #include <c_module_source_generator.hh>
 
 static std::string type_header_path;
-static std::string user_header_path;
-static std::string user_header_type_path;
-static std::string module_header_path;
-static std::string module_header_type_path;
-static std::string user_src_path;
-static std::string user_src_header_path;
-static std::string module_src_path;
-static std::string module_src_header_path;
+static std::string client_header_path;
+static std::string client_header_type_path;
+static std::string server_header_path;
+static std::string server_header_type_path;
+static std::string server_client_header_path;
+static std::string server_client_header_type_path;
+static std::string client_src_path;
+static std::string client_src_header_path;
+static std::string server_src_path;
+static std::string server_src_header_path;
+static std::string server_client_src_path;
+static std::string server_client_src_header_path;
 static bool make_weak_symbols = false;
 
 static std::string path_basename(const std::string &path)
@@ -60,32 +64,99 @@ bool c_handle_option(const std::string &arg)
     } else if (arg.rfind("--type-header=", 0) == 0) {
         type_header_path = arg.substr(14);
         return true;
-    } else if (arg.rfind("--user-header=", 0) == 0) {
-        user_header_path = arg.substr(14);
+    } else if (arg.rfind("--client-header=", 0) == 0) {
+        client_header_path = arg.substr(16);
         return true;
-    } else if (arg.rfind("--user-header-type-path=", 0) == 0) {
-        user_header_type_path = arg.substr(24);
+    } else if (arg.rfind("--client-header-type-path=", 0) == 0) {
+        client_header_type_path = arg.substr(26);
         return true;
-    } else if (arg.rfind("--module-header=", 0) == 0) {
-        module_header_path = arg.substr(16);
+    } else if (arg.rfind("--server-header=", 0) == 0) {
+        server_header_path = arg.substr(16);
         return true;
-    } else if (arg.rfind("--module-header-type-path=", 0) == 0) {
-        module_header_type_path = arg.substr(26);
+    } else if (arg.rfind("--server-header-type-path=", 0) == 0) {
+        server_header_type_path = arg.substr(26);
         return true;
-    } else if (arg.rfind("--user-src=", 0) == 0) {
-        user_src_path = arg.substr(11);
+    } else if (arg.rfind("--server-client-header=", 0) == 0) {
+        server_client_header_path = arg.substr(23);
         return true;
-    } else if (arg.rfind("--user-src-header-path=", 0) == 0) {
-        user_src_header_path = arg.substr(23);
+    } else if (arg.rfind("--server-client-header-type-path=", 0) == 0) {
+        server_client_header_type_path = arg.substr(33);
         return true;
-    } else if (arg.rfind("--module-src=", 0) == 0) {
-        module_src_path = arg.substr(13);
+    } else if (arg.rfind("--client-src=", 0) == 0) {
+        client_src_path = arg.substr(13);
         return true;
-    } else if (arg.rfind("--module-src-header-path=", 0) == 0) {
-        module_src_header_path = arg.substr(25);
+    } else if (arg.rfind("--client-src-header-path=", 0) == 0) {
+        client_src_header_path = arg.substr(25);
+        return true;
+    } else if (arg.rfind("--server-src=", 0) == 0) {
+        server_src_path = arg.substr(13);
+        return true;
+    } else if (arg.rfind("--server-src-header-path=", 0) == 0) {
+        server_src_header_path = arg.substr(25);
+        return true;
+    } else if (arg.rfind("--server-client-src=", 0) == 0) {
+        server_client_src_path = arg.substr(20);
+        return true;
+    } else if (arg.rfind("--server-client-src-header-path=", 0) == 0) {
+        server_client_src_header_path = arg.substr(32);
         return true;
     }
     return false;
+}
+
+static bool generate_client_header(
+    InterfaceNode *interface,
+    const std::string &header_path,
+    const std::string &header_type_path,
+    CHeaderGenerator::Mode mode
+)
+{
+    std::string type_header_include_path;
+
+    if (type_header_path.empty()) {
+        std::cerr << "Error: client header requires --type-header" << std::endl;
+        return false;
+    }
+
+    if (!header_type_path.empty()) {
+        type_header_include_path = header_type_path;
+    } else {
+        type_header_include_path = derive_include_path(header_path, type_header_path);
+    }
+
+    std::ofstream header_file(header_path);
+    if (!header_file.is_open()) {
+        std::cerr << "Error: Could not open file " << header_path << std::endl;
+        return false;
+    }
+
+    CHeaderGenerator header_gen(header_file, mode, type_header_include_path);
+    interface->accept(header_gen);
+
+    return true;
+}
+
+static bool generate_client_source(
+    InterfaceNode *interface, const std::string &source_path, const std::string &header_path
+)
+{
+    std::string source_header_path = header_path;
+
+    if (source_header_path.empty()) {
+        std::cerr << "Error: Could not determine client source header path" << std::endl;
+        return false;
+    }
+
+    std::ofstream source_file(source_path);
+    if (!source_file.is_open()) {
+        std::cerr << "Error: Could not open file " << source_path << std::endl;
+        return false;
+    }
+
+    CUserSourceGenerator source_gen(source_file, source_header_path, make_weak_symbols);
+    interface->accept(source_gen);
+
+    return true;
 }
 
 bool c_generate_user(InterfaceNode *interface)
@@ -100,50 +171,51 @@ bool c_generate_user(InterfaceNode *interface)
         interface->accept(header_gen);
     }
 
-    if (!user_header_path.empty()) {
-        std::string user_header_type_header_path;
-
-        if (type_header_path.empty()) {
-            std::cerr << "Error: --user-header requires --type-header" << std::endl;
+    if (!client_header_path.empty()) {
+        if (!generate_client_header(
+                interface,
+                client_header_path,
+                client_header_type_path,
+                CHeaderGenerator::Mode::CLIENT
+            )) {
             return false;
         }
-
-        if (!user_header_type_path.empty()) {
-            user_header_type_header_path = user_header_type_path;
-        } else {
-            user_header_type_header_path = derive_include_path(user_header_path, type_header_path);
-        }
-
-        std::ofstream header_file(user_header_path);
-        if (!header_file.is_open()) {
-            std::cerr << "Error: Could not open file " << user_header_path << std::endl;
-            return false;
-        }
-        CHeaderGenerator header_gen(
-            header_file,
-            CHeaderGenerator::Mode::USER,
-            user_header_type_header_path
-        );
-        interface->accept(header_gen);
     }
 
-    if (user_src_header_path.empty() && !user_header_path.empty()) {
-        user_src_header_path = derive_include_path(user_src_path, user_header_path);
+    if (!server_client_header_path.empty()) {
+        if (!generate_client_header(
+                interface,
+                server_client_header_path,
+                server_client_header_type_path,
+                CHeaderGenerator::Mode::SERVER_CLIENT
+            )) {
+            return false;
+        }
     }
 
-    if (!user_src_path.empty()) {
-        if (user_src_header_path.empty()) {
-            std::cerr << "Error: Could not determine user source header path" << std::endl;
-            return false;
-        }
+    if (client_src_header_path.empty() && !client_header_path.empty()) {
+        client_src_header_path = derive_include_path(client_src_path, client_header_path);
+    }
 
-        std::ofstream user_src_file(user_src_path);
-        if (!user_src_file.is_open()) {
-            std::cerr << "Error: Could not open file " << user_src_path << std::endl;
+    if (!client_src_path.empty()) {
+        if (!generate_client_source(interface, client_src_path, client_src_header_path)) {
             return false;
         }
-        CUserSourceGenerator source_gen(user_src_file, user_src_header_path, make_weak_symbols);
-        interface->accept(source_gen);
+    }
+
+    if (server_client_src_header_path.empty() && !server_client_header_path.empty()) {
+        server_client_src_header_path =
+            derive_include_path(server_client_src_path, server_client_header_path);
+    }
+
+    if (!server_client_src_path.empty()) {
+        if (!generate_client_source(
+                interface,
+                server_client_src_path,
+                server_client_src_header_path
+            )) {
+            return false;
+        }
     }
 
     return true;
@@ -151,50 +223,50 @@ bool c_generate_user(InterfaceNode *interface)
 
 bool c_generate_module(InterfaceNode *interface)
 {
-    if (!module_header_path.empty()) {
-        std::string module_header_type_header_path;
+    if (!server_header_path.empty()) {
+        std::string server_header_type_header_path;
 
         if (type_header_path.empty()) {
-            std::cerr << "Error: --module-header requires --type-header" << std::endl;
+            std::cerr << "Error: --server-header requires --type-header" << std::endl;
             return false;
         }
 
-        if (!module_header_type_path.empty()) {
-            module_header_type_header_path = module_header_type_path;
+        if (!server_header_type_path.empty()) {
+            server_header_type_header_path = server_header_type_path;
         } else {
-            module_header_type_header_path =
-                derive_include_path(module_header_path, type_header_path);
+            server_header_type_header_path =
+                derive_include_path(server_header_path, type_header_path);
         }
 
-        std::ofstream header_file(module_header_path);
+        std::ofstream header_file(server_header_path);
         if (!header_file.is_open()) {
-            std::cerr << "Error: Could not open file " << module_header_path << std::endl;
+            std::cerr << "Error: Could not open file " << server_header_path << std::endl;
             return false;
         }
         CHeaderGenerator header_gen(
             header_file,
-            CHeaderGenerator::Mode::MODULE,
-            module_header_type_header_path
+            CHeaderGenerator::Mode::SERVER,
+            server_header_type_header_path
         );
         interface->accept(header_gen);
     }
 
-    if (module_src_header_path.empty() && !module_header_path.empty()) {
-        module_src_header_path = derive_include_path(module_src_path, module_header_path);
+    if (server_src_header_path.empty() && !server_header_path.empty()) {
+        server_src_header_path = derive_include_path(server_src_path, server_header_path);
     }
 
-    if (!module_src_path.empty()) {
-        if (module_src_header_path.empty()) {
-            std::cerr << "Error: Could not determine module source header path" << std::endl;
+    if (!server_src_path.empty()) {
+        if (server_src_header_path.empty()) {
+            std::cerr << "Error: Could not determine server source header path" << std::endl;
             return false;
         }
 
-        std::ofstream module_src_file(module_src_path);
-        if (!module_src_file.is_open()) {
-            std::cerr << "Error: Could not open file " << module_src_path << std::endl;
+        std::ofstream server_src_file(server_src_path);
+        if (!server_src_file.is_open()) {
+            std::cerr << "Error: Could not open file " << server_src_path << std::endl;
             return false;
         }
-        CModuleSourceGenerator source_gen(module_src_file, module_src_header_path);
+        CModuleSourceGenerator source_gen(server_src_file, server_src_header_path);
         interface->accept(source_gen);
     }
 

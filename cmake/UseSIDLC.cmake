@@ -6,18 +6,16 @@ if(NOT SIDLC_EXECUTABLE)
     message(FATAL_ERROR "sidlc executable not found. Set SIDLC_EXECUTABLE or install sidlc in PATH.")
 endif()
 
-get_filename_component(SIDLC_INTERFACE_DIRECTORY ${SIDLC_EXECUTABLE} DIRECTORY)
-get_filename_component(SIDLC_INTERFACE_DIRECTORY ${SIDLC_INTERFACE_DIRECTORY}/../lib/sidl/interfaces/ ABSOLUTE)
-
 # =========================================================================
 # sidl_generate_c
-# Usage: sidl_generate_c(USER|MODULE SRCS_VAR source_list_out_var_name HDRS_VAR header_list_out_var_name FILES file1.sidl file2.sidl ...)
+# Usage: sidl_generate_c(CLIENT|SERVER|SERVER_CLIENT SRCS_VAR source_list_out_var_name HDRS_VAR header_list_out_var_name FILES file1.sidl file2.sidl ...)
 # Generates:
-#   USER:   <name>.types.h, <name>.h, <name>.c
-#   MODULE: <name>.types.h, <name>.module.h, <name>.module.c
+#   CLIENT:        <name>.types.h, <name>.client.h, <name>.client.c
+#   SERVER:        <name>.types.h, <name>.server.h, <name>.server.c
+#   SERVER_CLIENT: <name>.types.h, <name>.server-client.h, <name>.server-client.c
 # =========================================================================
 function(sidl_generate_c)
-    set(options USER MODULE)
+    set(options CLIENT SERVER SERVER_CLIENT)
     set(oneValueArgs HEADER_DIR SRCS_VAR HDRS_VAR)
     set(multiValueArgs FILES)
     cmake_parse_arguments(PARSE_ARGV 0 arg
@@ -28,8 +26,8 @@ function(sidl_generate_c)
         message(FATAL_ERROR "sidl_generate_c() called without any SIDL files.")
     endif()
 
-    if(NOT arg_USER AND NOT arg_MODULE)
-        message(FATAL_ERROR "sidl_generate_c() requires at least one of USER or MODULE.")
+    if(NOT arg_CLIENT AND NOT arg_SERVER AND NOT arg_SERVER_CLIENT)
+        message(FATAL_ERROR "sidl_generate_c() requires at least one of CLIENT, SERVER, or SERVER_CLIENT.")
     endif()
 
     if (NOT arg_HEADER_DIR)
@@ -56,38 +54,55 @@ function(sidl_generate_c)
 
         list(APPEND _generated_hdrs ${out_types_hdr})
 
-        if(arg_USER)
-            set(out_user_hdr "${arg_HEADER_DIR}/${basename}.h")
-            set(out_user_src "${arg_HEADER_DIR}/${basename}.c")
-            get_filename_component(out_user_hdr_name "${out_user_hdr}" NAME)
+        if(arg_CLIENT)
+            set(out_client_hdr "${arg_HEADER_DIR}/${basename}.client.h")
+            set(out_client_src "${arg_HEADER_DIR}/${basename}.client.c")
+            get_filename_component(out_client_hdr_name "${out_client_hdr}" NAME)
 
-            list(APPEND outputs ${out_user_hdr} ${out_user_src})
+            list(APPEND outputs ${out_client_hdr} ${out_client_src})
             list(APPEND sidlc_args
-                --user-header=${out_user_hdr}
-                --user-header-type-path=${out_types_hdr_name}
-                --user-src=${out_user_src}
-                --user-src-header-path=${out_user_hdr_name}
+                --client-header=${out_client_hdr}
+                --client-header-type-path=${out_types_hdr_name}
+                --client-src=${out_client_src}
+                --client-src-header-path=${out_client_hdr_name}
             )
 
-            list(APPEND _generated_hdrs ${out_user_hdr})
-            list(APPEND _generated_srcs ${out_user_src})
+            list(APPEND _generated_hdrs ${out_client_hdr})
+            list(APPEND _generated_srcs ${out_client_src})
         endif()
 
-        if(arg_MODULE)
-            set(out_module_hdr "${arg_HEADER_DIR}/${basename}.module.h")
-            set(out_module_src "${arg_HEADER_DIR}/${basename}.module.c")
-            get_filename_component(out_module_hdr_name "${out_module_hdr}" NAME)
+        if(arg_SERVER)
+            set(out_server_hdr "${arg_HEADER_DIR}/${basename}.server.h")
+            set(out_server_src "${arg_HEADER_DIR}/${basename}.server.c")
+            get_filename_component(out_server_hdr_name "${out_server_hdr}" NAME)
 
-            list(APPEND outputs ${out_module_hdr} ${out_module_src})
+            list(APPEND outputs ${out_server_hdr} ${out_server_src})
             list(APPEND sidlc_args
-                --module-header=${out_module_hdr}
-                --module-header-type-path=${out_types_hdr_name}
-                --module-src=${out_module_src}
-                --module-src-header-path=${out_module_hdr_name}
+                --server-header=${out_server_hdr}
+                --server-header-type-path=${out_types_hdr_name}
+                --server-src=${out_server_src}
+                --server-src-header-path=${out_server_hdr_name}
             )
 
-            list(APPEND _generated_hdrs ${out_module_hdr})
-            list(APPEND _generated_srcs ${out_module_src})
+            list(APPEND _generated_hdrs ${out_server_hdr})
+            list(APPEND _generated_srcs ${out_server_src})
+        endif()
+
+        if(arg_SERVER_CLIENT)
+            set(out_server_client_hdr "${arg_HEADER_DIR}/${basename}.server-client.h")
+            set(out_server_client_src "${arg_HEADER_DIR}/${basename}.server-client.c")
+            get_filename_component(out_server_client_hdr_name "${out_server_client_hdr}" NAME)
+
+            list(APPEND outputs ${out_server_client_hdr} ${out_server_client_src})
+            list(APPEND sidlc_args
+                --server-client-header=${out_server_client_hdr}
+                --server-client-header-type-path=${out_types_hdr_name}
+                --server-client-src=${out_server_client_src}
+                --server-client-src-header-path=${out_server_client_hdr_name}
+            )
+
+            list(APPEND _generated_hdrs ${out_server_client_hdr})
+            list(APPEND _generated_srcs ${out_server_client_src})
         endif()
 
         add_custom_command(

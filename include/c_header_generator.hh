@@ -12,8 +12,9 @@ class CHeaderGenerator : public AstVisitor {
   public:
     enum class Mode {
         TYPE,
-        USER,
-        MODULE,
+        CLIENT,
+        SERVER,
+        SERVER_CLIENT,
     };
 
   private:

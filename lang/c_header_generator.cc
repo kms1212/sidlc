@@ -41,9 +41,10 @@ void CHeaderGenerator::write_parameter_declaration(std::ostream &stream, const P
 void CHeaderGenerator::visit(InterfaceNode &node)
 {
     const bool is_type_header = mode == Mode::TYPE;
-    const bool is_user_header = mode == Mode::USER;
-    const bool is_module_header = mode == Mode::MODULE;
-    size_t module_arg_slot_count = 0;
+    const bool is_client_header = mode == Mode::CLIENT;
+    const bool is_server_header = mode == Mode::SERVER;
+    const bool is_server_client_header = mode == Mode::SERVER_CLIENT;
+    size_t server_arg_slot_count = 0;
 
     prefix.clear();
     macro_prefix.clear();
@@ -51,12 +52,12 @@ void CHeaderGenerator::visit(InterfaceNode &node)
     total_funcid_span = 0;
     abi_revision_count = 0;
 
-    if (is_module_header) {
+    if (is_server_header) {
         if (!g_current_arch_abi || g_current_arch_abi->max_reg_args <= 2) {
             throw std::runtime_error("Invalid architecture ABI");
         }
 
-        module_arg_slot_count = g_current_arch_abi->max_reg_args - 2;
+        server_arg_slot_count = g_current_arch_abi->max_reg_args - 2;
     }
 
     buf_macros.str("");
@@ -190,37 +191,47 @@ void CHeaderGenerator::visit(InterfaceNode &node)
         return;
     }
 
-    if (is_user_header) {
-        out << "#ifndef __SIDL_INTERFACE_" << macro_interface_name << "_H__\n";
-        out << "#define __SIDL_INTERFACE_" << macro_interface_name << "_H__\n\n";
+    if (is_client_header || is_server_client_header) {
+        out << "#ifndef __SIDL_INTERFACE_" << macro_interface_name
+            << (is_server_client_header ? "_SERVER_CLIENT_H__\n" : "_CLIENT_H__\n");
+        out << "#define __SIDL_INTERFACE_" << macro_interface_name
+            << (is_server_client_header ? "_SERVER_CLIENT_H__\n\n" : "_CLIENT_H__\n\n");
         out << "#include \"" << dependency_header_name << "\"\n\n";
+
+        out << "StStatus " << prefix
+            << "Open(const uint8_t *path __in, uint32_t flags __in, StHandle *handle __out);\n";
+        out << "StStatus " << prefix
+            << "Query(StHandle handle __in, uint32_t request_abiver __in, "
+               "uint32_t *funcid_base __out, uint32_t *result_abiver __out);\n";
+        out << "\n";
 
         if (buf_functions.tellp() > 0) {
             out << "/* Functions & Views */\n";
             out << buf_functions.str() << "\n";
         }
 
-        out << "#endif /* __SIDL_INTERFACE_" << macro_interface_name << "_H__ */\n";
+        out << "#endif /* __SIDL_INTERFACE_" << macro_interface_name
+            << (is_server_client_header ? "_SERVER_CLIENT_H__" : "_CLIENT_H__") << " */\n";
         return;
     }
 
-    if (is_module_header) {
-        out << "#ifndef __SIDL_INTERFACE_" << macro_interface_name << "_MODULE_H__\n";
-        out << "#define __SIDL_INTERFACE_" << macro_interface_name << "_MODULE_H__\n\n";
+    if (is_server_header) {
+        out << "#ifndef __SIDL_INTERFACE_" << macro_interface_name << "_SERVER_H__\n";
+        out << "#define __SIDL_INTERFACE_" << macro_interface_name << "_SERVER_H__\n\n";
         out << "#include \"" << dependency_header_name << "\"\n\n";
 
-        out << "/* Module Interface */\n";
-        out << "typedef struct " << prefix << "ModuleVTable {\n";
+        out << "/* Server Interface */\n";
+        out << "typedef struct " << prefix << "ServerVTable {\n";
         out << buf_module_vtable_fields.str();
-        out << "} " << prefix << "ModuleVTable;\n\n";
-        out << "StStatus " << prefix << "ModuleDispatchArgs(\n";
+        out << "} " << prefix << "ServerVTable;\n\n";
+        out << "StStatus " << prefix << "ServerDispatchArgs(\n";
         out << "    const void *vtable __in,\n";
         out << "    void *context __inout,\n";
         out << "    StHandle handle __in,\n";
         out << "    uint32_t funcid __in,\n";
-        out << "    const long args[" << module_arg_slot_count << "]\n";
+        out << "    const long args[" << server_arg_slot_count << "]\n";
         out << ");\n\n";
-        out << "#endif /* __SIDL_INTERFACE_" << macro_interface_name << "_MODULE_H__ */\n";
+        out << "#endif /* __SIDL_INTERFACE_" << macro_interface_name << "_SERVER_H__ */\n";
         return;
     }
 }
@@ -344,9 +355,11 @@ void CHeaderGenerator::visit(FunctionNode &node)
     }
 
     if (node.parameters.empty()) {
-        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in";
+        buf_functions << "StStatus " << prefix << node.name
+                      << "(StHandle handle __in, uint32_t funcid_base __in";
     } else {
-        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in, ";
+        buf_functions << "StStatus " << prefix << node.name
+                      << "(StHandle handle __in, uint32_t funcid_base __in, ";
     }
 
     for (const auto &param : node.parameters) {
