@@ -15,10 +15,19 @@ class CUserSourceGenerator : public AstVisitor {
     std::stringstream buf_macros;
     std::stringstream buf_functions;
     bool make_weak_symbols;
+    bool emit_handle_binding;
 
   public:
-    CUserSourceGenerator(std::ostream &out, const std::string &header_name, bool make_weak_symbols)
-        : out(out), header_name(header_name), make_weak_symbols(make_weak_symbols)
+    CUserSourceGenerator(
+        std::ostream &out,
+        const std::string &header_name,
+        bool make_weak_symbols,
+        bool emit_handle_binding
+    )
+        : out(out),
+          header_name(header_name),
+          make_weak_symbols(make_weak_symbols),
+          emit_handle_binding(emit_handle_binding)
     {
     }
 

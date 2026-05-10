@@ -46,7 +46,8 @@ void CUserSourceGenerator::visit(InterfaceNode &node)
     out << "#include <stdint.h>\n\n";
     out << "#include <strata/status.h>\n";
     out << "#include <strata/macros.h>\n";
-    out << "#include <strata/uuid.h>\n\n";
+    out << "#include <strata/uuid.h>\n";
+    out << "\n";
 
     if (buf_macros.tellp() > 0) {
         out << "/* Constants & Bitmasks */\n";
@@ -56,18 +57,20 @@ void CUserSourceGenerator::visit(InterfaceNode &node)
     out << "static const struct StUuid interface_uuid = "
         << "UUID_" << macro_interface_name << "_INTERFACE_INIT;\n\n";
 
-    out << "StStatus " << prefix
-        << "Open(const uint8_t *path __in, uint32_t flags __in, StHandle *handle __out)\n";
-    out << "{\n";
-    out << "    return StHandle_Open(path, flags, handle);\n";
-    out << "}\n\n";
-    out << "StStatus " << prefix
-        << "Query(StHandle handle __in, uint32_t request_abiver __in, "
-           "uint32_t *funcid_base __out, uint32_t *result_abiver __out)\n";
-    out << "{\n";
-    out << "    return StHandle_Query(handle, &interface_uuid, request_abiver, funcid_base, "
-           "result_abiver);\n";
-    out << "}\n\n";
+    if (emit_handle_binding) {
+        out << "StStatus " << prefix
+            << "Open(const uint8_t *path __in, uint32_t flags __in, StHandle *handle __out)\n";
+        out << "{\n";
+        out << "    return StHandle_Open(path, flags, handle);\n";
+        out << "}\n\n";
+        out << "StStatus " << prefix
+            << "Query(StHandle handle __in, uint32_t request_abiver __in, "
+               "uint32_t *funcid_base __out, uint32_t *result_abiver __out)\n";
+        out << "{\n";
+        out << "    return StHandle_Query(handle, &interface_uuid, request_abiver, funcid_base, "
+               "result_abiver);\n";
+        out << "}\n\n";
+    }
 
     if (buf_functions.tellp() > 0) {
         out << "/* Functions & Views */\n";
@@ -95,11 +98,9 @@ void CUserSourceGenerator::visit(FunctionNode &node)
         buf_functions << "__attribute__((weak))\n";
     }
     if (node.parameters.empty()) {
-        buf_functions << "StStatus " << prefix << node.name
-                      << "(StHandle handle __in, uint32_t funcid_base __in";
+        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in";
     } else {
-        buf_functions << "StStatus " << prefix << node.name
-                      << "(StHandle handle __in, uint32_t funcid_base __in, ";
+        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in, ";
     }
 
     for (const auto &param : node.parameters) {
@@ -166,6 +167,7 @@ void CUserSourceGenerator::visit(FunctionNode &node)
 
     buf_functions << "{\n";
     buf_functions << "    StStatus status;\n";
+    buf_functions << "    uint32_t funcid_base;\n";
 
     if (!can_use_call_reg && !in_params.empty()) {
         if (in_params.size() > 1) {
@@ -223,6 +225,9 @@ void CUserSourceGenerator::visit(FunctionNode &node)
                           << " out;\n";
         }
     }
+    buf_functions << "    status = StHandle_Query(handle, &interface_uuid, 0, &funcid_base, NULL);\n";
+    buf_functions << "    if (!CHECK_SUCCESS(status)) { return status; }\n";
+
     if (can_use_call_reg) {
         buf_functions << "    status = StHandle_Call" << node.parameters.size()
                       << "(handle, funcid_base + FUNCID_" << node.name;

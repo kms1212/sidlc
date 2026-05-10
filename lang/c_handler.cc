@@ -137,7 +137,10 @@ static bool generate_client_header(
 }
 
 static bool generate_client_source(
-    InterfaceNode *interface, const std::string &source_path, const std::string &header_path
+    InterfaceNode *interface,
+    const std::string &source_path,
+    const std::string &header_path,
+    bool emit_handle_binding
 )
 {
     std::string source_header_path = header_path;
@@ -153,7 +156,12 @@ static bool generate_client_source(
         return false;
     }
 
-    CUserSourceGenerator source_gen(source_file, source_header_path, make_weak_symbols);
+    CUserSourceGenerator source_gen(
+        source_file,
+        source_header_path,
+        make_weak_symbols,
+        emit_handle_binding
+    );
     interface->accept(source_gen);
 
     return true;
@@ -198,7 +206,7 @@ bool c_generate_user(InterfaceNode *interface)
     }
 
     if (!client_src_path.empty()) {
-        if (!generate_client_source(interface, client_src_path, client_src_header_path)) {
+        if (!generate_client_source(interface, client_src_path, client_src_header_path, true)) {
             return false;
         }
     }
@@ -212,7 +220,8 @@ bool c_generate_user(InterfaceNode *interface)
         if (!generate_client_source(
                 interface,
                 server_client_src_path,
-                server_client_src_header_path
+                server_client_src_header_path,
+                false
             )) {
             return false;
         }

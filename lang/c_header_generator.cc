@@ -198,12 +198,14 @@ void CHeaderGenerator::visit(InterfaceNode &node)
             << (is_server_client_header ? "_SERVER_CLIENT_H__\n\n" : "_CLIENT_H__\n\n");
         out << "#include \"" << dependency_header_name << "\"\n\n";
 
-        out << "StStatus " << prefix
-            << "Open(const uint8_t *path __in, uint32_t flags __in, StHandle *handle __out);\n";
-        out << "StStatus " << prefix
-            << "Query(StHandle handle __in, uint32_t request_abiver __in, "
-               "uint32_t *funcid_base __out, uint32_t *result_abiver __out);\n";
-        out << "\n";
+        if (is_client_header) {
+            out << "StStatus " << prefix
+                << "Open(const uint8_t *path __in, uint32_t flags __in, StHandle *handle __out);\n";
+            out << "StStatus " << prefix
+                << "Query(StHandle handle __in, uint32_t request_abiver __in, "
+                   "uint32_t *funcid_base __out, uint32_t *result_abiver __out);\n";
+            out << "\n";
+        }
 
         if (buf_functions.tellp() > 0) {
             out << "/* Functions & Views */\n";
@@ -355,11 +357,9 @@ void CHeaderGenerator::visit(FunctionNode &node)
     }
 
     if (node.parameters.empty()) {
-        buf_functions << "StStatus " << prefix << node.name
-                      << "(StHandle handle __in, uint32_t funcid_base __in";
+        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in";
     } else {
-        buf_functions << "StStatus " << prefix << node.name
-                      << "(StHandle handle __in, uint32_t funcid_base __in, ";
+        buf_functions << "StStatus " << prefix << node.name << "(StHandle handle __in, ";
     }
 
     for (const auto &param : node.parameters) {
