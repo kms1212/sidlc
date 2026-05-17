@@ -1,6 +1,7 @@
 #include <c_header_generator.hh>
 
 #include <algorithm>
+#include <cctype>
 #include <stdexcept>
 
 #include <uuid.h>
@@ -79,79 +80,52 @@ void CHeaderGenerator::visit(InterfaceNode &node)
         }
     );
 
+    if (!node.has_uuid) {
+        throw std::runtime_error("Interface UUID is required");
+    }
+    if (!node.has_prefix) {
+        throw std::runtime_error("Interface prefix is required");
+    }
+
+    prefix = node.prefix;
+    macro_prefix = prefix;
+    std::transform(
+        macro_prefix.begin(),
+        macro_prefix.end(),
+        macro_prefix.begin(),
+        [](unsigned char ch) {
+            return static_cast<char>(std::toupper(ch));
+        }
+    );
+
+    uuids::uuid_name_generator gen(uuids::uuid(node.uuid_namespace));
+    auto final_uuid = gen(node.uuid_name);
+    std::span<const std::byte, 16> bytes = final_uuid.as_bytes();
+
+    buf_macros << "#define UUID_" << macro_interface_name << "_INTERFACE_INIT UUID_INIT("
+               << std::hex;
+    for (size_t i = 0; i < bytes.size(); ++i) {
+        buf_macros << "0x" << static_cast<int>(bytes[i]);
+        if (i + 1 < bytes.size()) {
+            buf_macros << ", ";
+        }
+    }
+    buf_macros << std::dec << ")\n";
+
+    buf_macros << "#define UUID_" << macro_interface_name << "_INTERFACE UUID(" << std::hex;
+    for (size_t i = 0; i < bytes.size(); ++i) {
+        buf_macros << "0x" << static_cast<int>(bytes[i]);
+        if (i + 1 < bytes.size()) {
+            buf_macros << ", ";
+        }
+    }
+    buf_macros << std::dec << ")\n";
+
     for (const auto &anno : node.annotations) {
         if (anno->name == "prefix") {
-            if (anno->args.size() != 1) {
-                throw std::runtime_error("Invalid argument size");
-            }
-
-            auto prefix_param = dynamic_cast<StringLiteralExpressionNode *>(anno->args[0].get());
-            if (!prefix_param) {
-                throw std::runtime_error("Invalid argument type");
-            }
-
-            prefix = prefix_param->value.substr(1, prefix_param->value.size() - 2);
-            macro_prefix = prefix;
-            std::transform(
-                macro_prefix.begin(),
-                macro_prefix.end(),
-                macro_prefix.begin(),
-                [](unsigned char ch) {
-                    return static_cast<char>(std::toupper(ch));
-                }
-            );
+            throw std::runtime_error("Prefix must be stored as interface metadata, not annotation");
         } else if (anno->name == "uuid") {
-            if (anno->args.size() != 2) {
-                throw std::runtime_error("Invalid argument size");
-            }
-
-            auto namespace_param = dynamic_cast<StringLiteralExpressionNode *>(anno->args[0].get());
-            if (!namespace_param) {
-                throw std::runtime_error("Invalid argument type");
-            }
-
-            std::string_view namespace_str =
-                namespace_param->value.substr(1, namespace_param->value.size() - 2);
-
-            if (!uuids::uuid::is_valid_uuid(namespace_str)) {
-                throw std::runtime_error("Invalid UUID");
-            }
-
-            auto uuid = uuids::uuid::from_string(namespace_str);
-            if (!uuid) {
-                throw std::runtime_error("Invalid UUID");
-            }
-
-            auto name_param = dynamic_cast<StringLiteralExpressionNode *>(anno->args[1].get());
-            if (!name_param) {
-                throw std::runtime_error("Invalid argument type");
-            }
-
-            std::string_view name_str = name_param->value.substr(1, name_param->value.size() - 2);
-
-            uuids::uuid_name_generator gen(uuid.value());
-            auto final_uuid = gen(name_str);
-
-            std::span<const std::byte, 16> bytes = final_uuid.as_bytes();
-
-            buf_macros << "#define UUID_" << macro_interface_name << "_INTERFACE_INIT UUID_INIT("
-                       << std::hex;
-            for (size_t i = 0; i < bytes.size(); ++i) {
-                buf_macros << "0x" << static_cast<int>(bytes[i]);
-                if (i + 1 < bytes.size()) {
-                    buf_macros << ", ";
-                }
-            }
-            buf_macros << std::dec << ")\n";
-
-            buf_macros << "#define UUID_" << macro_interface_name << "_INTERFACE UUID(" << std::hex;
-            for (size_t i = 0; i < bytes.size(); ++i) {
-                buf_macros << "0x" << static_cast<int>(bytes[i]);
-                if (i + 1 < bytes.size()) {
-                    buf_macros << ", ";
-                }
-            }
-            buf_macros << std::dec << ")\n";
+            throw std::runtime_error("UUID must be stored as interface identity, not annotation");
         }
     }
 

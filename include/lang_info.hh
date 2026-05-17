@@ -10,14 +10,9 @@ struct LangTypeInfo {
     size_t alignment;
 };
 
-struct InterfaceNode;
-
 struct LangInfo {
     std::string name;
     std::map<std::string, LangTypeInfo> type_infos;
-    bool (*handle_option)(const std::string &arg);
-    bool (*generate_user)(InterfaceNode *interface);
-    bool (*generate_module)(InterfaceNode *interface);
 };
 
 extern const LangInfo *g_current_lang_info;

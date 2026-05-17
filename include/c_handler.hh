@@ -5,8 +5,22 @@
 
 struct InterfaceNode;
 
-bool c_handle_option(const std::string &arg);
-bool c_generate_user(InterfaceNode *interface);
-bool c_generate_module(InterfaceNode *interface);
+enum class CGenerateMode {
+    Client,
+    Server,
+    ServerClient,
+};
+
+struct CGenerateOptions {
+    CGenerateMode mode;
+    std::string type_header_path;
+    std::string type_header_include_path;
+    std::string header_path;
+    std::string source_path;
+    std::string source_header_include_path;
+    bool make_weak_symbols = false;
+};
+
+bool c_generate(InterfaceNode *interface, const CGenerateOptions &options);
 
 #endif  // __C_HANDLER_HH__

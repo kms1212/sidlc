@@ -1,5 +1,9 @@
 #include <c_user_source_generator.hh>
 
+#include <algorithm>
+#include <cctype>
+#include <stdexcept>
+
 #include <uuid.h>
 
 #include <arch_abi.hh>
@@ -17,18 +21,14 @@ void CUserSourceGenerator::visit(InterfaceNode &node)
         ::toupper
     );
 
+    if (!node.has_prefix) {
+        throw std::runtime_error("Interface prefix is required");
+    }
+    prefix = node.prefix;
+
     for (const auto &anno : node.annotations) {
         if (anno->name == "prefix") {
-            if (anno->args.size() != 1) {
-                throw std::runtime_error("Invalid argument size");
-            }
-
-            auto prefix_param = dynamic_cast<StringLiteralExpressionNode *>(anno->args[0].get());
-            if (!prefix_param) {
-                throw std::runtime_error("Invalid argument type");
-            }
-
-            prefix = prefix_param->value.substr(1, prefix_param->value.size() - 2);
+            throw std::runtime_error("Prefix must be stored as interface metadata, not annotation");
         }
     }
 

@@ -28,11 +28,11 @@ void Parser::append_abiversion_or_throw(
     InterfaceNode &interface, std::unique_ptr<AbiversionNode> abiversion
 )
 {
-    uint64_t expected_version = interface.abiversions.size();
+    uint64_t expected_version = first_abirevision + interface.abiversions.size();
 
     if (abiversion->version != expected_version) {
         throw std::runtime_error(
-            "ABI revisions must start at 0 and be contiguous; expected revision "
+            "ABI revisions must be contiguous; expected revision "
             + std::to_string(expected_version) + ", got " + std::to_string(abiversion->version)
         );
     }
@@ -44,6 +44,7 @@ std::unique_ptr<InterfaceNode> Parser::parse()
 {
     try {
         auto node = std::make_unique<InterfaceNode>();
+        node->current_funcid = first_funcid;
 
         advance();
 
@@ -160,7 +161,7 @@ std::unique_ptr<TypeNode> Parser::parse_type()
 
         consume(Token::Type('>'));
 
-        node->type_size = g_current_arch_abi->pointer_size;
+        node->type_size = g_current_arch_abi ? g_current_arch_abi->pointer_size : 0;
     } else if (current_token.type == Token::TYPE_KWD_ARRAY) {
         node->is_array = true;
         advance();

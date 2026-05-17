@@ -1,7 +1,9 @@
 #ifndef __AST_HH__
 #define __AST_HH__
 
+#include <array>
 #include <memory>
+#include <string>
 #include <vector>
 
 struct InterfaceNode;
@@ -101,10 +103,10 @@ struct AnnotationNode : public AstNode {
 struct TypeNode : public AstNode {
     std::string_view name;
     std::unique_ptr<TypeNode> inner_type;
-    bool is_ptr;
-    bool is_array;
-    bool is_const;
-    size_t type_size;
+    bool is_ptr = false;
+    bool is_array = false;
+    bool is_const = false;
+    size_t type_size = 0;
 
     void accept(AstVisitor &visitor) override
     {
@@ -222,6 +224,8 @@ struct BitfieldNode : public AstNode {
 
 struct AbiversionNode : public AstNode {
     uint64_t version;
+    std::array<uint8_t, 32> previous_hash = {};
+    std::array<uint8_t, 32> abi_hash = {};
     std::vector<std::unique_ptr<AnnotationNode>> annotations;
     std::vector<std::unique_ptr<FunctionNode>> functions;
     std::vector<std::unique_ptr<StructNode>> structs;
@@ -239,11 +243,23 @@ struct AbiversionNode : public AstNode {
 
 struct InterfaceNode : public AstNode {
     std::string_view name;
+    std::vector<std::unique_ptr<std::string>> owned_strings;
+    bool has_uuid = false;
+    std::array<uint8_t, 16> uuid_namespace = {};
+    std::string_view uuid_name;
+    bool has_prefix = false;
+    std::string_view prefix;
     std::vector<std::unique_ptr<AnnotationNode>> annotations;
     std::vector<std::unique_ptr<AbiversionNode>> abiversions;
     uint32_t current_funcid;
 
     InterfaceNode() : current_funcid(0) {}
+
+    std::string_view own_string(std::string value)
+    {
+        owned_strings.push_back(std::make_unique<std::string>(std::move(value)));
+        return *owned_strings.back();
+    }
 
     void accept(AstVisitor &visitor) override
     {

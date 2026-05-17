@@ -8,6 +8,8 @@ class Parser {
   private:
     Lexer lexer;
     Token current_token;
+    uint64_t first_abirevision;
+    uint32_t first_funcid;
 
     void advance();
     void expect(Token::Type token_type);
@@ -28,7 +30,13 @@ class Parser {
     std::unique_ptr<ParameterNode> parse_parameter();
 
   public:
-    Parser(std::string_view source) : lexer(source) {}
+    Parser(
+        std::string_view source,
+        uint64_t first_abirevision = 0,
+        uint32_t first_funcid = 0
+    )
+        : lexer(source), first_abirevision(first_abirevision), first_funcid(first_funcid)
+    {}
 
     std::unique_ptr<InterfaceNode> parse();
 };
