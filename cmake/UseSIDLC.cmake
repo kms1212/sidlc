@@ -7,125 +7,165 @@ if(NOT SIDLC_EXECUTABLE)
 endif()
 
 # =========================================================================
-# sidl_generate_c
-# Usage: sidl_generate_c(CLIENT|SERVER|SERVER_CLIENT SRCS_VAR source_list_out_var_name HDRS_VAR header_list_out_var_name FILES file1.sidl file2.sidl ...)
-# Generates:
-#   CLIENT:        <name>.types.h, <name>.h, <name>.c
-#   SERVER:        <name>.types.h, <name>.server.h, <name>.server.c
-#   SERVER_CLIENT: <name>.types.h, <name>.server-client.h, <name>.server-client.c
+# sidlc_compile
+# Usage:
+#   sidlc_compile(
+#       OUTPUT_DIR <dir>
+#       SIFS_VAR <sif_list_out_var_name>
+#       FILES <file.sidl>...)
+#
+# Compiles human-authored .sidl files into binary .sif interface artifacts.
 # =========================================================================
-function(sidl_generate_c)
-    set(options CLIENT SERVER SERVER_CLIENT)
-    set(oneValueArgs HEADER_DIR SRCS_VAR HDRS_VAR)
+function(sidlc_compile)
+    set(options)
+    set(oneValueArgs OUTPUT_DIR SIFS_VAR)
     set(multiValueArgs FILES)
     cmake_parse_arguments(PARSE_ARGV 0 arg
         "${options}" "${oneValueArgs}" "${multiValueArgs}"
     )
 
     if(NOT arg_FILES)
-        message(FATAL_ERROR "sidl_generate_c() called without any SIDL files.")
+        message(FATAL_ERROR "sidlc_compile() called without any SIDL files.")
+    endif()
+    if(NOT arg_SIFS_VAR)
+        message(FATAL_ERROR "sidlc_compile() requires SIFS_VAR.")
+    endif()
+    if(NOT arg_OUTPUT_DIR)
+        set(arg_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}")
     endif()
 
-    if(NOT arg_CLIENT AND NOT arg_SERVER AND NOT arg_SERVER_CLIENT)
-        message(FATAL_ERROR "sidl_generate_c() requires at least one of CLIENT, SERVER, or SERVER_CLIENT.")
-    endif()
+    file(MAKE_DIRECTORY "${arg_OUTPUT_DIR}")
+    set(generated_sifs)
 
-    if (NOT arg_HEADER_DIR)
-        set(arg_HEADER_DIR "${CMAKE_CURRENT_BINARY_DIR}")
-    endif()
-
-    set(_generated_srcs)
-    set(_generated_hdrs)
-
-    file(MAKE_DIRECTORY "${arg_HEADER_DIR}")
-
-    foreach(sidl_file ${arg_FILES})
-        get_filename_component(abs_file ${sidl_file} ABSOLUTE)
-        get_filename_component(basename ${sidl_file} NAME_WE)
-
-        set(out_sif "${arg_HEADER_DIR}/${basename}.sif")
-        set(out_types_hdr "${arg_HEADER_DIR}/${basename}.types.h")
-        set(outputs ${out_types_hdr})
-        set(generate_commands)
+    foreach(sidl_file IN LISTS arg_FILES)
+        get_filename_component(abs_file "${sidl_file}" ABSOLUTE)
+        get_filename_component(basename "${sidl_file}" NAME_WE)
+        set(out_sif "${arg_OUTPUT_DIR}/${basename}.sif")
 
         add_custom_command(
-            OUTPUT ${out_sif}
-            COMMAND ${SIDLC_EXECUTABLE} compile -o ${out_sif} ${abs_file}
-            DEPENDS ${abs_file} ${SIDLC_EXECUTABLE}
+            OUTPUT "${out_sif}"
+            COMMAND ${SIDLC_EXECUTABLE} compile -o "${out_sif}" "${abs_file}"
+            DEPENDS "${abs_file}" ${SIDLC_EXECUTABLE}
             COMMENT "Compiling SIDL interface artifact: ${basename}.sif"
             VERBATIM
         )
-        set_source_files_properties(${out_sif} PROPERTIES GENERATED TRUE)
-
-        list(APPEND _generated_hdrs ${out_types_hdr})
-
-        if(arg_CLIENT)
-            set(out_client_hdr "${arg_HEADER_DIR}/${basename}.h")
-            set(out_client_src "${arg_HEADER_DIR}/${basename}.client.c")
-
-            list(APPEND outputs ${out_client_hdr} ${out_client_src})
-            list(APPEND generate_commands
-                COMMAND ${SIDLC_EXECUTABLE} generate
-                    -a ${CMAKE_SYSTEM_PROCESSOR}
-                    -l c
-                    -m client
-                    -h ${arg_HEADER_DIR}
-                    -s ${out_client_src}
-                    ${out_sif}
-            )
-
-            list(APPEND _generated_hdrs ${out_client_hdr})
-            list(APPEND _generated_srcs ${out_client_src})
-        endif()
-
-        if(arg_SERVER)
-            set(out_server_hdr "${arg_HEADER_DIR}/${basename}.server.h")
-            set(out_server_src "${arg_HEADER_DIR}/${basename}.server.c")
-
-            list(APPEND outputs ${out_server_hdr} ${out_server_src})
-            list(APPEND generate_commands
-                COMMAND ${SIDLC_EXECUTABLE} generate
-                    -a ${CMAKE_SYSTEM_PROCESSOR}
-                    -l c
-                    -m server
-                    -h ${arg_HEADER_DIR}
-                    -s ${out_server_src}
-                    ${out_sif}
-            )
-
-            list(APPEND _generated_hdrs ${out_server_hdr})
-            list(APPEND _generated_srcs ${out_server_src})
-        endif()
-
-        if(arg_SERVER_CLIENT)
-            set(out_server_client_hdr "${arg_HEADER_DIR}/${basename}.server-client.h")
-            set(out_server_client_src "${arg_HEADER_DIR}/${basename}.server-client.c")
-
-            list(APPEND outputs ${out_server_client_hdr} ${out_server_client_src})
-            list(APPEND generate_commands
-                COMMAND ${SIDLC_EXECUTABLE} generate
-                    -a ${CMAKE_SYSTEM_PROCESSOR}
-                    -l c
-                    -m server-client
-                    -h ${arg_HEADER_DIR}
-                    -s ${out_server_client_src}
-                    ${out_sif}
-            )
-
-            list(APPEND _generated_hdrs ${out_server_client_hdr})
-            list(APPEND _generated_srcs ${out_server_client_src})
-        endif()
-
-        add_custom_command(
-            OUTPUT ${outputs}
-            ${generate_commands}
-            DEPENDS ${out_sif} ${SIDLC_EXECUTABLE}
-            COMMENT "Generating C bindings from SIDL interface artifact: ${basename}.sif"
-            VERBATIM
-        )
-        set_source_files_properties(${outputs} PROPERTIES GENERATED TRUE)
+        set_source_files_properties("${out_sif}" PROPERTIES GENERATED TRUE)
+        list(APPEND generated_sifs "${out_sif}")
     endforeach()
 
-    set(${arg_SRCS_VAR} ${_generated_srcs} PARENT_SCOPE)
-    set(${arg_HDRS_VAR} ${_generated_hdrs} PARENT_SCOPE)
+    set(${arg_SIFS_VAR} ${generated_sifs} PARENT_SCOPE)
+endfunction()
+
+# =========================================================================
+# sidlc_generate
+# Usage:
+#   sidlc_generate(CLIENT|SERVER|SERVER_CLIENT
+#       HEADER_DIR <dir>
+#       [INCLUDE_DIR <include-path>]
+#       [ARCH <arch>]
+#       [LANG <lang>]
+#       SRCS_VAR <source_list_out_var_name>
+#       HDRS_VAR <header_list_out_var_name>
+#       SIFS <file.sif>...)
+#
+# Generates source/header bindings from compiled .sif artifacts.
+# =========================================================================
+function(sidlc_generate)
+    set(options CLIENT SERVER SERVER_CLIENT WEAK)
+    set(oneValueArgs ARCH LANG HEADER_DIR INCLUDE_DIR SRCS_VAR HDRS_VAR)
+    set(multiValueArgs SIFS)
+    cmake_parse_arguments(PARSE_ARGV 0 arg
+        "${options}" "${oneValueArgs}" "${multiValueArgs}"
+    )
+
+    if(NOT arg_SIFS)
+        message(FATAL_ERROR "sidlc_generate() called without any SIF files.")
+    endif()
+    if(NOT arg_CLIENT AND NOT arg_SERVER AND NOT arg_SERVER_CLIENT)
+        message(FATAL_ERROR "sidlc_generate() requires one of CLIENT, SERVER, or SERVER_CLIENT.")
+    endif()
+    if(arg_CLIENT AND arg_SERVER)
+        message(FATAL_ERROR "sidlc_generate() accepts only one generation mode.")
+    endif()
+    if(arg_CLIENT AND arg_SERVER_CLIENT)
+        message(FATAL_ERROR "sidlc_generate() accepts only one generation mode.")
+    endif()
+    if(arg_SERVER AND arg_SERVER_CLIENT)
+        message(FATAL_ERROR "sidlc_generate() accepts only one generation mode.")
+    endif()
+    if(NOT arg_SRCS_VAR)
+        message(FATAL_ERROR "sidlc_generate() requires SRCS_VAR.")
+    endif()
+    if(NOT arg_HDRS_VAR)
+        message(FATAL_ERROR "sidlc_generate() requires HDRS_VAR.")
+    endif()
+    if(NOT arg_HEADER_DIR)
+        set(arg_HEADER_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
+    if(NOT arg_ARCH)
+        set(arg_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
+    if(NOT arg_LANG)
+        set(arg_LANG c)
+    endif()
+
+    if(arg_CLIENT)
+        set(generate_mode client)
+        set(header_suffix ".h")
+        set(source_suffix ".client.c")
+    elseif(arg_SERVER)
+        set(generate_mode server)
+        set(header_suffix ".server.h")
+        set(source_suffix ".server.c")
+    else()
+        set(generate_mode server-client)
+        set(header_suffix ".server-client.h")
+        set(source_suffix ".server-client.c")
+    endif()
+
+    file(MAKE_DIRECTORY "${arg_HEADER_DIR}")
+    set(generated_srcs)
+    set(generated_hdrs)
+
+    foreach(sif_file IN LISTS arg_SIFS)
+        get_filename_component(abs_sif "${sif_file}" ABSOLUTE)
+        get_filename_component(basename "${sif_file}" NAME_WE)
+
+        set(out_types_hdr "${arg_HEADER_DIR}/${basename}.types.h")
+        set(out_binding_hdr "${arg_HEADER_DIR}/${basename}${header_suffix}")
+        set(out_binding_src "${arg_HEADER_DIR}/${basename}${source_suffix}")
+        set(command_args
+            generate
+            -a "${arg_ARCH}"
+            -l "${arg_LANG}"
+            -m "${generate_mode}"
+            -h "${arg_HEADER_DIR}"
+            -s "${out_binding_src}"
+        )
+        if(arg_INCLUDE_DIR)
+            list(APPEND command_args -i "${arg_INCLUDE_DIR}")
+        endif()
+        if(arg_WEAK)
+            list(APPEND command_args --weak)
+        endif()
+        list(APPEND command_args "${abs_sif}")
+
+        add_custom_command(
+            OUTPUT "${out_types_hdr}" "${out_binding_hdr}" "${out_binding_src}"
+            COMMAND ${SIDLC_EXECUTABLE} ${command_args}
+            DEPENDS "${abs_sif}" ${SIDLC_EXECUTABLE}
+            COMMENT "Generating bindings from SIDL interface artifact: ${basename}.sif"
+            VERBATIM
+        )
+        set_source_files_properties(
+            "${out_types_hdr}" "${out_binding_hdr}" "${out_binding_src}"
+            PROPERTIES GENERATED TRUE
+        )
+
+        list(APPEND generated_hdrs "${out_types_hdr}" "${out_binding_hdr}")
+        list(APPEND generated_srcs "${out_binding_src}")
+    endforeach()
+
+    set(${arg_SRCS_VAR} ${generated_srcs} PARENT_SCOPE)
+    set(${arg_HDRS_VAR} ${generated_hdrs} PARENT_SCOPE)
 endfunction()
